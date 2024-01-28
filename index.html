@@ -1,0 +1,93 @@
+<html>
+  <header>
+  </header>
+  
+  <body>
+     
+<!-- _header.html -->
+ 
+	<h1> <a href="?"><img src="octopus.png" width="100" height="100" alt="🐙" /></a> Inklings</h1>
+	<nav>
+	  <a href="/">Home</a> 
+	  <span>|</span> <a href="/bookshelf">Bookshelf</a> 
+	  <span>|</span> <a href="/notebook">Notebook</a>
+	  <span>|</span> <a href="/account">Account</a>
+	  <a class="right-align" href="/search">Search</a> 
+	</nav>
+	<style>
+	  h1 {
+		font-family:Handwriting;
+		font-size:90;
+		margin:0;
+		font-weight:normal;
+		
+		display: flex;
+	  }
+	  img {
+		margin-top:0;
+		}
+	  nav {
+		background-color:#333333;
+		padding:10px;
+		height:20px;
+	  }
+	  nav a { 
+		color:#FFFFFF;
+		text-decoration:none;
+		//font-family:Handwriting;
+		//font-size:20;
+	  }
+	  nav span { color:#FFFFFF; margin:10px; }
+	  
+	  .right-align {
+		float:right;
+	  }
+	</style>
+
+
+<!-- page/home.html -->
+        	
+	<main class="hidden page-home">
+	  	Welcome to Inklings!
+	   <br><a href="?editor">Write a story.</a>
+	</main>
+
+<!-- page/editor.html -->
+        	
+	<main class="hidden page-editor">
+	    <form action="?view" method="POST">
+		      <textarea placeholder="The foreboding blankness of an empty page..." style="width:100%"></textarea>
+		  <br><input type=submit value="Submit."/>
+		</form>
+	</main>
+
+<!-- page/view.html -->
+        	
+	<main class="hidden page-view">
+		<blockquote>
+			Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna
+			aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+			Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint
+			occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+		</blockquote>
+		<hr>
+		<b>Fan Alice</b>: Wow this might be one of my favourite stories this year!
+		<hr>
+		<b>Fan Beverley</b>: The pacing is serviceable, but "in voluptate velit" isn't something I could imagine any real person saying.
+	</main>
+	
+<!-- _logic.html -->
+	<style>
+		.hidden { display: none }
+		main { margin: 5em }
+	</style>
+	<script>
+		let queryString = document.location.search
+		let page = queryString.match(/[a-z]+/) || "home"
+		let currentPage = document.getElementsByClassName(`page-${page}`)[0]
+		//currentPage.style.background = '#dfd'
+		currentPage.classList.remove("hidden")
+	</script>
+<!-- -->
+	</body>
+</html>
