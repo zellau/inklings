@@ -9,10 +9,7 @@ server["/"] = shareFile("./index.html")
 server["/a"] = scopes { 
     html {
       header {
-        link {
-          rel = "stylesheet"
-          href = "inklings.css"
-        }
+        addStylesheet();
       }
       body {
         makeHeader();
@@ -28,6 +25,13 @@ print("Server has started ( port = \(try server.port()) ). Try to connect now...
 //bleh
 import Dispatch
 DispatchSemaphore(value: 0).wait()
+
+func addStylesheet() -> () {
+  link {
+    rel = "stylesheet"
+    href = "inklings.css"
+  }
+}
 
 func makeHeader() -> () {
   return div {
