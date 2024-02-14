@@ -6,7 +6,8 @@ import PackageDescription
 let package = Package(
     name: "inklings",
     dependencies: [
-        .package(url: "https://github.com/httpswift/swifter.git", .upToNextMajor(from: "1.5.0"))
+        .package(url: "https://github.com/httpswift/swifter.git", .upToNextMajor(from: "1.5.0")),
+        .package(url: "https://github.com/stephencelis/SQLite.swift.git", from: "0.14.1")
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -14,7 +15,8 @@ let package = Package(
         .executableTarget(
             name: "inklings",
             dependencies: [
-                .product(name: "Swifter", package: "swifter")
+                .product(name: "Swifter", package: "swifter"),
+                .product(name: "SQLite", package: "SQLite.swift")
             ]
         ),
     ]

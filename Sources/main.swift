@@ -2,6 +2,8 @@
 // https://docs.swift.org/swift-book
 
 import Swifter
+import SQLite
+
 let server = HttpServer()
 server["/octopus.png"] = shareFile("./octopus.png")
 server["/inklings.css"] = shareFile("./inklings.css")
