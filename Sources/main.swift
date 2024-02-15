@@ -15,6 +15,24 @@ server["/a"] = scopes {
       }
       body {
         makeHeader();
+         do {
+            let pages = Table("pages");
+            let title = Expression<String>("title")
+            let body = Expression<String>("body")
+
+            let db = try Connection("inklings.sqlite3");
+
+            for page in try db.prepare(pages) {
+                h2 {
+                    inner = page[title]
+                }
+                p {
+                    inner = page[body]
+                }
+            }
+         } catch {
+            //log this probably
+         }
       }
     }
   }
