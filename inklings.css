@@ -32,3 +32,7 @@ nav span {
 .right-align {
   float:right;
 }
+
+.notebook {
+	line-height: 2;
+}
