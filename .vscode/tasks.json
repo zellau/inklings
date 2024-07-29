@@ -1,0 +1,26 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "swift",
+			"args": [
+				"build",
+				"--product",
+				"inklings",
+				"-Xlinker",
+				"-debug:dwarf"
+			],
+			"cwd": "c:\\Users\\Zella\\Documents\\inklings3",
+			"disableTaskQueue": true,
+			"problemMatcher": [
+				"$swiftc"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"label": "swift: Build Debug inklings",
+			"detail": "swift build --product inklings -Xlinker -debug:dwarf"
+		}
+	]
+}

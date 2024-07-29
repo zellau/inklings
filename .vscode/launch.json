@@ -1,0 +1,28 @@
+{
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "sourceLanguages": [
+                "swift"
+            ],
+            "args": [],
+            "cwd": "${workspaceFolder:inklings3}",
+            "name": "Debug inklings",
+            "program": "${workspaceFolder:inklings3}\\.build\\debug\\inklings.exe",
+            "preLaunchTask": "swift: Build Debug inklings"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "sourceLanguages": [
+                "swift"
+            ],
+            "args": [],
+            "cwd": "${workspaceFolder:inklings3}",
+            "name": "Release inklings",
+            "program": "${workspaceFolder:inklings3}\\.build\\release\\inklings.exe",
+            "preLaunchTask": "swift: Build Release inklings"
+        }
+    ]
+}
