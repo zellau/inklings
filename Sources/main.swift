@@ -32,6 +32,85 @@ server["/"] = scopes {
     }
   }
 
+   server["/notebook/:notebook"] = { request in
+     guard let notebook_id = Int("\(request.params[":notebook"]!)") else {
+       //TODO: deal with this
+       return HttpResponse.ok(.text("\(request.params[":notebook"])"))
+     }
+     return scopes {
+      html {
+        header {
+          addStylesheet();
+        }
+        body {
+          makeHeader();
+          showNotebook(notebook_id);
+        }
+      }
+     }(request)
+   }
+
+   server["/notebook/:notebook/:page"] = { request in
+     guard let notebook_id = Int("\(request.params[":notebook"]!)") else {
+       //TODO: deal with this
+       return HttpResponse.ok(.text("\(request.params[":notebook"])"))
+     }
+     guard let page_id = Int("\(request.params[":page"]!)") else {
+       //TODO: deal with this
+       return HttpResponse.ok(.text("\(request.params[":page"])"))
+     }
+     return scopes {
+      html {
+        header {
+          addStylesheet();
+        }
+        body {
+          makeHeader();
+          showPage(page_id, inNotebook: notebook_id);
+        }
+      }
+     }(request)
+   }
+
+   server["/notebook/:notebook/:page/edit"] = { request in
+     guard let notebook_id = Int("\(request.params[":notebook"]!)") else {
+       //TODO: deal with this
+       return HttpResponse.ok(.text("\(request.params[":notebook"])"))
+     }
+     guard let page_id = Int("\(request.params[":page"]!)") else {
+       //TODO: deal with this
+       return HttpResponse.ok(.text("\(request.params[":page"])"))
+     }
+     return scopes {
+      html {
+        header {
+          addStylesheet();
+        }
+        body {
+          makeHeader();
+          editPage(page_id, inNotebook: notebook_id);
+        }
+      }
+     }(request)
+   }
+
+   server["/notebook/:notebook/new"] = { request in
+     guard let notebook_id = Int("\(request.params[":notebook"]!)") else {
+       //TODO: deal with this
+       return HttpResponse.ok(.text("\(request.params[":notebook"])"))
+     }
+     return scopes {
+      html {
+        header {
+          addStylesheet();
+        }
+        body {
+          makeHeader();
+          editPage();
+        }
+      }
+     }(request)
+   }
 
 try server.start(8081)
 print("Server has started ( port = \(try server.port()) ). Try to connect now...")
@@ -45,7 +124,7 @@ DispatchSemaphore(value: 0).wait()
 func addStylesheet() -> () {
   link {
     rel = "stylesheet"
-    href = "inklings.css"
+    href = "/inklings.css"
   }
 }
 
@@ -53,7 +132,7 @@ func makeHeader() -> () {
   return div {
     h1 {
       img {
-        src = "octopus.png"
+        src = "/octopus.png"
         width = "100"
         height = "100"
       }
@@ -69,7 +148,7 @@ func makeHeader() -> () {
       span { inner = "|" }
       a {
         href="/bookshelf"
-        inner="Boookshelf"
+        inner="Bookshelf"
       }
       span { inner = "|" }
       a {
@@ -113,6 +192,66 @@ func showPage(_ pageID: Int) {
   }
 }
 
+func showPage(_ pageID: Int, inNotebook notebookID: Int) {
+  do {
+    let pages = Table("pages");
+    let id = Expression<Int>("pageID")
+    let title = Expression<String>("title")
+    let body = Expression<String>("body")
+
+    let db = try Connection("inklings.sqlite3");
+    let query = pages.where(id == pageID)
+    let page = try db.pluck(query)!
+
+    h2 {
+      inner = page[title]
+    }
+    a {
+      href = "/notebook/\(notebookID)/\(pageID)/edit"
+      inner = "Edit"
+    }
+    p {
+      classs = "notebook"
+      inner = page[body]
+    }
+   } catch {
+    //log this probably
+  }
+}
+
+func editPage(_ pageID: Int, inNotebook notebookID: Int) {
+  do {
+    let pages = Table("pages");
+    let id = Expression<Int>("pageID")
+    let title = Expression<String>("title")
+    let body = Expression<String>("body")
+
+    let db = try Connection("inklings.sqlite3");
+    let query = pages.where(id == pageID)
+    let page = try db.pluck(query)!
+
+    form {
+      input {
+        type = "text"
+        idd = "title"
+        value = page[title]
+      }
+      br {}
+      textarea {
+        idd = "body"
+        inner = page[body]
+      }
+      br {}
+      input {
+        type = "submit"
+        value = "submit"
+      }
+    }
+   } catch {
+    //log this probably
+  }
+}
+
 enum Roles: Int {
   case writer = 1
   case editor
@@ -136,14 +275,94 @@ func showNotebooks(forUser user: Int) {
     for story in try db.prepare(notebookStories) {
       let notebooks = stories.where(storyID == story[storyID])
       for notebook in try db.prepare(notebooks) {
-        h2 {
-          inner = "\(notebook[title])"
-        }
-        p {
-          inner = notebook[description]
+        a {
+          classs = "blocklink"
+          href = "/notebook/\(notebook[storyID])"
+          h2 {
+            inner = notebook[title]
+          }
+          p {
+            inner = notebook[description]
+          }
         }
       }
     }
+    a {
+      classs = "blocklink"
+      href = "/notebook/new"
+      h2 {
+        inner = "New notebook"
+      }
+    }
+   } catch {
+    //log this probably
+  }
+}
+
+func showNotebook(_ notebookID: Int) { //TODO: add user specific logic
+  do {
+    let storiesTable = Table("stories");
+    let pagesTable = Table("pages");
+
+    let storyID = Expression<Int>("storyID")
+    let title = Expression<String>("title")
+    let description = Expression<String>("description")
+    let pageID = Expression<Int>("pageID")
+
+    let db = try Connection("inklings.sqlite3");
+    let query = storiesTable.where(storyID == notebookID)
+    guard let story = try db.pluck(query) else {
+      h1 {
+        inner = "This story does not exist."
+      }
+      return;
+    }
+    h2 {
+      inner = story[title];
+    }
+    p {
+      inner = story[description];
+    }
+    let pages = pagesTable.where(storyID == notebookID);
+    for page in try db.prepare(pages) {
+      a {
+        classs = "blocklink"
+        href = "/notebook/\(notebookID)/\(page[pageID])"
+        h3 {
+          inner = page[title]
+        }
+      }
+    }
+    a {
+      classs = "blocklink"
+      href = "/notebook/\(notebookID)/new"
+      h3 {
+        inner = "New page"
+      }
+    }
+   } catch {
+    //log this probably
+  }
+}
+
+func editPage() {
+  do {
+    // let pages = Table("pages");
+    // let id = Expression<Int>("pageID")
+    // let title = Expression<String>("title")
+    // let body = Expression<String>("body")
+
+    // let db = try Connection("inklings.sqlite3");
+    // let query = pages.where(id == pageID)
+    // let page = try db.pluck(query)!
+
+    // h2 {
+    //   inner = page[title]
+    // }
+    // p {
+    //   classs = "notebook"
+    //   inner = page[body]
+    //}
    } catch {
     //log this probably
   }

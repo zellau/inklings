@@ -36,3 +36,34 @@ nav span {
 .notebook {
 	line-height: 2;
 }
+
+.blocklink {
+    background-color:#E0E0E0;
+	margin:20px;
+	padding:10px;
+	border-radius:10px;
+	display:block;
+	color:black;
+	text-decoration:none;
+}
+.blocklink:hover {
+    background-color:#D0D0D0;
+}
+
+h2,p {
+	margin:0;
+}
+
+form {
+  margin-top: 5px;
+}
+
+#title {
+  width: 50%;
+  font-size:20px;
+}
+
+#body {
+  width:80%;
+  height: 60vh;
+}
