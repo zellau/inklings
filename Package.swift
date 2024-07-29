@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "inklings",
     dependencies: [
-        .package(url: "https://github.com/httpswift/swifter.git", .upToNextMajor(from: "1.5.0")),
+        .package(url: "https://github.com/httpswift/swifter.git", branch: "stable"),
         .package(url: "https://github.com/stephencelis/SQLite.swift.git", from: "0.14.1")
     ],
     targets: [
