@@ -35,7 +35,7 @@ server["/"] = scopes {
    server["/notebook/:notebook"] = { request in
      guard let notebook_id = Int("\(request.params[":notebook"]!)") else {
        //TODO: deal with this
-       return HttpResponse.ok(.text("\(request.params[":notebook"])"))
+       return HttpResponse.ok(.text("\(request.params[":notebook"]!)"))
      }
      return scopes {
       html {
@@ -53,11 +53,11 @@ server["/"] = scopes {
    server["/notebook/:notebook/:page"] = { request in
      guard let notebook_id = Int("\(request.params[":notebook"]!)") else {
        //TODO: deal with this
-       return HttpResponse.ok(.text("\(request.params[":notebook"])"))
+       return HttpResponse.ok(.text("\(request.params[":notebook"]!)"))
      }
      guard let page_id = Int("\(request.params[":page"]!)") else {
        //TODO: deal with this
-       return HttpResponse.ok(.text("\(request.params[":page"])"))
+       return HttpResponse.ok(.text("\(request.params[":page"]!)"))
      }
      return scopes {
       html {
@@ -75,11 +75,11 @@ server["/"] = scopes {
    server["/notebook/:notebook/:page/edit"] = { request in
      guard let notebook_id = Int("\(request.params[":notebook"]!)") else {
        //TODO: deal with this
-       return HttpResponse.ok(.text("\(request.params[":notebook"])"))
+       return HttpResponse.ok(.text("\(request.params[":notebook"]!)"))
      }
      guard let page_id = Int("\(request.params[":page"]!)") else {
        //TODO: deal with this
-       return HttpResponse.ok(.text("\(request.params[":page"])"))
+       return HttpResponse.ok(.text("\(request.params[":page"]!)"))
      }
      return scopes {
       html {
@@ -95,9 +95,10 @@ server["/"] = scopes {
    }
 
    server["/notebook/:notebook/new"] = { request in
-     guard let notebook_id = Int("\(request.params[":notebook"]!)") else {
+     //guard let notebook_id
+     guard let _ = Int("\(request.params[":notebook"]!)") else {
        //TODO: deal with this
-       return HttpResponse.ok(.text("\(request.params[":notebook"])"))
+       return HttpResponse.ok(.text("\(request.params[":notebook"]!)"))
      }
      return scopes {
       html {
@@ -363,7 +364,8 @@ func editPage() {
     //   classs = "notebook"
     //   inner = page[body]
     //}
-   } catch {
-    //log this probably
-  }
+   } 
+  //  catch {
+  //   //log this probably
+  // }
 }
