@@ -1,6 +1,10 @@
 // The Swift Programming Language
 // https://docs.swift.org/swift-book
 
+/*
+docker run -p 8081:8081 -v .\:/code --workdir /code -it swift:5.9 bash -c "apt update && apt install libsqlite3-dev && swift run"
+*/
+
 import Swifter
 import SQLite
 
@@ -56,7 +60,7 @@ server["/"] = scopes {
         }
         body {
           makeHeader();
-          showNotebook(notebook_id);
+          showNotebook(notebook_id, toUser: 1);
         }
       }
      }(request)
@@ -344,8 +348,9 @@ func showNotebooks(forUser user: Int) {
   }
 }
 
-func showNotebook(_ notebookID: Int) { //TODO: add user specific logic
+func showNotebook(_ notebookID: Int, toUser user: Int) { //TODO: add user specific logic
   do {
+    let user_storiesTable = Table("user_stories");
     let storiesTable = Table("stories");
     let pagesTable = Table("pages");
 
@@ -354,7 +359,15 @@ func showNotebook(_ notebookID: Int) { //TODO: add user specific logic
     let description = Expression<String>("description")
     let pageID = Expression<Int>("pageID")
 
+    let userID = Expression<Int>("userID")
+    let role = Expression<Int>("role")
+
     let db = try Connection("inklings.sqlite3");
+    let roleQuery = user_storiesTable.where(userID == user && storyID == notebookID)
+    var userRole = 0;
+    if let userStory = try db.pluck(roleQuery){
+      userRole = userStory[role];
+    }
     let query = storiesTable.where(storyID == notebookID)
     guard let story = try db.pluck(query) else {
       h1 {
@@ -368,22 +381,34 @@ func showNotebook(_ notebookID: Int) { //TODO: add user specific logic
     p {
       inner = story[description];
     }
-    let pages = pagesTable.where(storyID == notebookID);
-    for page in try db.prepare(pages) {
-      a {
-        classs = "blocklink"
-        href = "/notebook/\(notebookID)/\(page[pageID])"
-        h3 {
-          inner = page[title]
+    if (userRole != 0) {
+      let pages = pagesTable.where(storyID == notebookID);
+      for page in try db.prepare(pages) {
+        a {
+          classs = "blocklink"
+          href = "/notebook/\(notebookID)/\(page[pageID])"
+          h3 {
+            inner = page[title]
+          }
         }
       }
-    }
-    a {
-      classs = "blocklink"
-      href = "/notebook/\(notebookID)/new"
-      h3 {
-        inner = "New page"
+      if (userRole == Roles.writer.rawValue) {
+        a {
+          classs = "blocklink"
+          href = "/notebook/\(notebookID)/new"
+          h3 {
+            inner = "New page"
+          }
+        }
       }
+    } else {
+      h3 {
+        inner = "You do not have permission to view this story. Request?"
+      }
+      a {
+        inner = "Request permission"
+      }
+      //TODO: make this work better with public stories
     }
    } catch {
     //log this probably
