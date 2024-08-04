@@ -20,6 +20,18 @@ server["/"] = scopes {
     }
   }
 
+  server["bookshelf"] = scopes {
+    html {
+      header {
+        addStylesheet();
+      }
+    }
+    body {
+      makeHeader();
+      showBookshelf(forUser: 1);
+    }
+  }
+
   server["/notebooks"] = scopes { 
     html {
       header {
@@ -259,6 +271,39 @@ enum Roles: Int {
   case reader
 }
 
+func showBookshelf(forUser user: Int) {
+  do {
+    let user_stories = Table("user_stories");
+    let stories = Table("stories");
+
+    let storyID = Expression<Int>("storyID")
+    let userID = Expression<Int>("userID")
+    let role = Expression<Int>("role")
+    let title = Expression<String>("title")
+    let description = Expression<String>("description")
+
+    let db = try Connection("inklings.sqlite3");
+    let bookshelfStories = user_stories.where(userID == user && role != Roles.writer.rawValue)
+    for story in try db.prepare(bookshelfStories) {
+      let notebooks = stories.where(storyID == story[storyID])
+      for notebook in try db.prepare(notebooks) {
+        a {
+          classs = "blocklink"
+          href = "/notebook/\(notebook[storyID])"
+          h2 {
+            inner = notebook[title]
+          }
+          p {
+            inner = notebook[description]
+          }
+        }
+      }
+    }
+   } catch {
+    //log this probably
+  }
+}
+
 func showNotebooks(forUser user: Int) {
   do {
     let user_stories = Table("user_stories");
@@ -346,7 +391,7 @@ func showNotebook(_ notebookID: Int) { //TODO: add user specific logic
 }
 
 func editPage() {
-  do {
+  //do {
     // let pages = Table("pages");
     // let id = Expression<Int>("pageID")
     // let title = Expression<String>("title")
@@ -363,7 +408,7 @@ func editPage() {
     //   classs = "notebook"
     //   inner = page[body]
     //}
-   } catch {
+   //} catch {
     //log this probably
-  }
+  //}
 }
