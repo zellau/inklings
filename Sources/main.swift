@@ -82,7 +82,7 @@ server["/"] = scopes {
         }
         body {
           makeHeader();
-          showPage(page_id, inNotebook: notebook_id);
+          showPage(page_id, inNotebook: notebook_id, toUser: 1);
         }
       }
      }(request)
@@ -208,27 +208,45 @@ func showPage(_ pageID: Int) {
   }
 }
 
-func showPage(_ pageID: Int, inNotebook notebookID: Int) {
+func showPage(_ pageID: Int, inNotebook notebookID: Int, toUser user: Int) {
   do {
     let pages = Table("pages");
+    let user_storiesTable = Table("user_stories");
     let id = Expression<Int>("pageID")
     let title = Expression<String>("title")
     let body = Expression<String>("body")
+    let storyID = Expression<Int>("storyID")
+    let userID = Expression<Int>("userID")
+    let role = Expression<Int>("role")
 
     let db = try Connection("inklings.sqlite3");
+    let roleQuery = user_storiesTable.where(userID == user && storyID == notebookID)
+    var userRole = 0;
+    if let userStory = try db.pluck(roleQuery){
+      userRole = userStory[role];
+    }
+
     let query = pages.where(id == pageID)
     let page = try db.pluck(query)!
 
-    h2 {
-      inner = page[title]
-    }
-    a {
-      href = "/notebook/\(notebookID)/\(pageID)/edit"
-      inner = "Edit"
-    }
-    p {
-      classs = "notebook"
-      inner = page[body]
+    if (userRole != 0) { //TODO: add more granularity to these roles
+      h2 {
+        inner = page[title]
+      }
+      if (userRole == Roles.writer.rawValue) {
+      a {
+          href = "/notebook/\(notebookID)/\(pageID)/edit"
+          inner = "Edit"
+        }
+      }
+      p {
+        classs = "notebook"
+        inner = page[body]
+      }
+    } else {
+      h3 {
+        inner = "You do not have permission to view this page."
+      }
     }
    } catch {
     //log this probably
