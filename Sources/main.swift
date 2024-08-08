@@ -2,17 +2,34 @@
 // https://docs.swift.org/swift-book
 
 /*
-docker run -p 8081:8081 -v .\:/code --workdir /code -it swift:5.9 bash -c "apt update && apt install libsqlite3-dev && swift run"
+docker run -p 8081:8081 -v .\:/code --workdir /code -it swift:5.9 bash -c "apt update && apt install libsqlite3-dev && bash"
+swift run
 docker stop $(docker ps --format '{{.Names}}')
 */
 
 import Swifter
 import SQLite
+import Foundation
 
 let server = HttpServer()
 server["/octopus.png"] = shareFile("./octopus.png")
 server["/inklings.css"] = shareFile("./inklings.css")
 server["/a"] = shareFile("./index.html")
+
+server["/z"] = scopes {
+   form {
+    method = "POST"
+    input {
+      type = "submit"
+      value = "Shutdown"
+    }
+  }
+}
+server.POST["/z"] = { _ in
+  print("Aborting...")
+  exit(1)
+}
+
 server["/"] = scopes { 
     html {
       header {
