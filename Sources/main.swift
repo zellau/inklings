@@ -3,6 +3,7 @@
 
 /*
 docker run -p 8081:8081 -v .\:/code --workdir /code -it swift:5.9 bash -c "apt update && apt install libsqlite3-dev && swift run"
+docker stop $(docker ps --format '{{.Names}}')
 */
 
 import Swifter
@@ -109,6 +110,37 @@ server["/"] = scopes {
       }
      }(request)
    }
+
+  server.POST["/notebook/:notebook/:page/save"] = { request in
+    guard let notebook_id = Int("\(request.params[":notebook"]!)") else {
+      //TODO: deal with this
+      return HttpResponse.ok(.text("\(request.params[":notebook"])"))
+    }
+    guard let page_id = Int("\(request.params[":page"]!)") else {
+      //TODO: deal with this
+      return HttpResponse.ok(.text("\(request.params[":page"])"))
+    }
+    var formData = [String: String]();
+    for (key,value) in request.parseUrlencodedForm() {
+      formData[key] = value;
+    }
+    let title = formData["title"]!;
+    let textBody = formData["body"]!;
+
+    savePage(page_id, inNotebook: notebook_id, title: title, textBody: textBody);
+
+    return scopes {
+      html {
+        header {
+          addStylesheet();
+        }
+        body {
+          makeHeader();
+          showPage(page_id, inNotebook: notebook_id, toUser: 1);
+        }
+      }
+    }(request)
+  }
 
    server["/notebook/:notebook/new"] = { request in
      guard let notebook_id = Int("\(request.params[":notebook"]!)") else {
@@ -265,22 +297,42 @@ func editPage(_ pageID: Int, inNotebook notebookID: Int) {
     let page = try db.pluck(query)!
 
     form {
+      action = "save"
+      method = "POST"
       input {
+        name = "title"
         type = "text"
         idd = "title"
         value = page[title]
       }
       br {}
       textarea {
+        name = "body"
         idd = "body"
         inner = page[body]
       }
       br {}
       input {
         type = "submit"
-        value = "submit"
+        value = "Save"
       }
     }
+   } catch {
+    //log this probably
+  }
+}
+
+func savePage(_ pageID: Int, inNotebook notebookID: Int, title: String, textBody: String) {
+  do {
+    //TODO: check that the user is allowed to do this
+    let pages = Table("pages");
+    let id = Expression<Int>("pageID")
+    let titleExpression = Expression<String>("title")
+    let bodyExpression = Expression<String>("body")
+
+    let db = try Connection("inklings.sqlite3");
+    let page = pages.filter(id == pageID);
+    try db.run(page.update(titleExpression <- title, bodyExpression <- textBody));
    } catch {
     //log this probably
   }
