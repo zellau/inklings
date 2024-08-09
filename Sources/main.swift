@@ -3,7 +3,7 @@
 
 /*
 docker run -p 8081:8081 -v .\:/code --workdir /code -it swift:5.9 bash -c "apt update && apt install libsqlite3-dev && bash"
-swift run
+while swift run; [ $? == 35 ]; do continue; done  #restart on /z
 docker stop $(docker ps --format '{{.Names}}')
 */
 
@@ -16,18 +16,9 @@ server["/octopus.png"] = shareFile("./octopus.png")
 server["/inklings.css"] = shareFile("./inklings.css")
 server["/a"] = shareFile("./index.html")
 
-server["/z"] = scopes {
-   form {
-    method = "POST"
-    input {
-      type = "submit"
-      value = "Shutdown"
-    }
-  }
-}
-server.POST["/z"] = { _ in
-  print("Aborting...")
-  exit(1)
+server["/z"] = { _ in
+  print("Restarting...")
+  exit(35)
 }
 
 server["/"] = scopes { 
