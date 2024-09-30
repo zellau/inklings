@@ -14,7 +14,6 @@ import Foundation
 let server = HttpServer()
 server["/octopus.png"] = shareFile("./octopus.png")
 server["/inklings.css"] = shareFile("./inklings.css")
-server["/a"] = shareFile("./index.html")
 
 server["/z"] = { _ in
   print("Restarting...")
@@ -270,18 +269,35 @@ func showPage(_ pageID: Int, inNotebook notebookID: Int, toUser user: Int) {
     let page = try db.pluck(query)!
 
     if (userRole != 0) { //TODO: add more granularity to these roles
-      h2 {
-        inner = page[title]
-      }
-      if (userRole == Roles.writer.rawValue) {
-      a {
-          href = "/notebook/\(notebookID)/\(pageID)/edit"
-          inner = "Edit"
+      div {
+        idd = "viewPage";
+        h2 {
+          inner = page[title]
+        }
+        if (userRole == Roles.writer.rawValue) {
+        a {
+            href = "/notebook/\(notebookID)/\(pageID)/edit"
+            inner = "Edit"
+          }
+        }
+        p {
+          classs = "notebook"
+          inner = page[body]
         }
       }
-      p {
-        classs = "notebook"
-        inner = page[body]
+      div {
+        idd = "commentDiv";
+        form {
+          textarea {
+            name = "comment";
+            idd = "commentBox";
+          }
+          br {}
+          input {
+            type = "submit"
+            value = "Save"
+          }
+        }
       }
     } else {
       h3 {
