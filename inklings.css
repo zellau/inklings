@@ -67,3 +67,26 @@ form {
   width:80%;
   height: 60vh;
 }
+
+#viewPage {
+  margin: 1%;
+  width:80%;
+  overflow-y: scroll;
+  height: calc(100vh - 175px);
+  float: left;
+}
+
+#commentDiv {
+  width:15%;
+  float: right;
+  background-color: #AAAAAA;
+  margin: 5px;
+  padding: 5px;
+  border-radius: 5px;
+}
+
+#commentBox {
+  height: 20vh;
+  width: calc(100% - 10px); 
+  vertical-align: top;
+}
