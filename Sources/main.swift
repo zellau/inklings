@@ -14,6 +14,9 @@ import Foundation
 let server = HttpServer()
 server["/octopus.png"] = shareFile("./octopus.png")
 server["/inklings.css"] = shareFile("./inklings.css")
+server["/Handwriting-Regular.otf"] = shareFile("./Handwriting-Regular.otf")
+server["/Handwriting-Bold.otf"] = shareFile("./Handwriting-Bold.otf")
+server["/Handwriting-Italic.otf"] = shareFile("./Handwriting-Italic.otf")
 
 server["/z"] = { _ in
   print("Restarting...")
@@ -22,7 +25,7 @@ server["/z"] = { _ in
 
 server["/"] = scopes { 
     html {
-      header {
+      head {
         addStylesheet();
       }
       body {
@@ -34,7 +37,7 @@ server["/"] = scopes {
 
   server["bookshelf"] = scopes {
     html {
-      header {
+      head {
         addStylesheet();
       }
     }
@@ -46,7 +49,7 @@ server["/"] = scopes {
 
   server["/notebooks"] = scopes { 
     html {
-      header {
+      head {
         addStylesheet();
       }
       body {
@@ -63,7 +66,7 @@ server["/"] = scopes {
      }
      return scopes {
       html {
-        header {
+        head {
           addStylesheet();
         }
         body {
@@ -85,7 +88,7 @@ server["/"] = scopes {
      }
      return scopes {
       html {
-        header {
+        head {
           addStylesheet();
         }
         body {
@@ -107,7 +110,7 @@ server["/"] = scopes {
      }
      return scopes {
       html {
-        header {
+        head {
           addStylesheet();
         }
         body {
@@ -138,7 +141,7 @@ server["/"] = scopes {
 
     return scopes {
       html {
-        header {
+        head {
           addStylesheet();
         }
         body {
@@ -156,7 +159,7 @@ server["/"] = scopes {
      }
      return scopes {
       html {
-        header {
+        head {
           addStylesheet();
         }
         body {
@@ -176,7 +179,7 @@ server.POST["/search"] = { request in
     
     return scopes {
       html {
-        header {
+        head {
           addStylesheet()
         }
         body {
