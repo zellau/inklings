@@ -247,6 +247,10 @@ func makeHeader() -> () {
           name = "q"
           placeholder = "Search..."
         }
+        button {
+          type = "submit"
+          classs = "search-button"
+        }
       }
     }
   }
