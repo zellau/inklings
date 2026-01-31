@@ -167,6 +167,26 @@ server["/"] = scopes {
      }(request)
    }
 
+server.POST["/search"] = { request in
+    var formData = [String: String]()
+    for (key, value) in request.parseUrlencodedForm() {
+      formData[key] = value
+    }
+    let query = formData["q"] ?? ""
+    
+    return scopes {
+      html {
+        header {
+          addStylesheet()
+        }
+        body {
+          makeHeader()
+          showSearchResults(query: query, forUser: 1)
+        }
+      }
+    }(request)
+  }
+
 try server.start(8081)
 print("Server has started ( port = \(try server.port()) ). Try to connect now...")
 
@@ -215,10 +235,15 @@ func makeHeader() -> () {
         href="/account"
         inner="Account"
       }
-      a {
-        href="/search"
+      form {
+        action = "/search"
+        method = "POST"
         classs = "right-align"
-        inner="Search"
+        input {
+          type = "text"
+          name = "q"
+          placeholder = "Search..."
+        }
       }
     }
   }
@@ -530,4 +555,155 @@ func editPage() {
    //} catch {
     //log this probably
   //}
+}
+
+func showSearchResults(query: String, forUser user: Int) {
+  h2 {
+    inner = "Search Results"
+  }
+  
+  if query.isEmpty {
+    p {
+      inner = "Please enter a search term."
+    }
+    return
+  }
+  
+  p {
+    inner = "Results for: \"\(query)\""
+  }
+  
+  do {
+    let pagesTable = Table("pages")
+    let storiesTable = Table("stories")
+    let user_storiesTable = Table("user_stories")
+    
+    let pageID = Expression<Int>("pageID")
+    let pageTitle = Expression<String>("title")
+    let pageBody = Expression<String>("body")
+    let pageStoryID = Expression<Int>("storyID")
+    
+    let storyID = Expression<Int>("storyID")
+    let storyTitle = Expression<String>("title")
+    let storyDescription = Expression<String>("description")
+    
+    let userID = Expression<Int>("userID")
+    let usStoryID = Expression<Int>("storyID")
+    
+    let db = try Connection("inklings.sqlite3")
+    
+    // Get all story IDs the user has access to
+    let accessibleStories = user_storiesTable.where(userID == user)
+    var storyIDs: [Int] = []
+    for story in try db.prepare(accessibleStories) {
+      storyIDs.append(story[usStoryID])
+    }
+    
+    if storyIDs.isEmpty {
+      p {
+        inner = "You don't have access to any notebooks."
+      }
+      return
+    }
+    
+    let searchPattern = "%\(query)%"
+    var storyResultCount = 0
+    var pageResultCount = 0
+    
+    // Search stories (notebooks) first
+    h3 {
+      inner = "Notebooks"
+    }
+    
+    for sid in storyIDs {
+      let storyQuery = storiesTable.where(
+        storyID == sid &&
+        (storyTitle.like(searchPattern) || storyDescription.like(searchPattern))
+      )
+      
+      for story in try db.prepare(storyQuery) {
+        storyResultCount += 1
+        div {
+          classs = "search-result"
+          a {
+            href = "/notebook/\(sid)"
+            h4 {
+              inner = story[storyTitle]
+            }
+          }
+          let descText = story[storyDescription]
+          let snippet = String(descText.prefix(200))
+          p {
+            classs = "search-snippet"
+            inner = snippet + (descText.count > 200 ? "..." : "")
+          }
+        }
+      }
+    }
+    
+    if storyResultCount == 0 {
+      p {
+        inner = "No matching notebooks found."
+      }
+    }
+    
+    // Search pages
+    h3 {
+      inner = "Pages"
+    }
+    
+    for sid in storyIDs {
+      // Get the story title for display
+      let storyQuery = storiesTable.where(storyID == sid)
+      guard let story = try db.pluck(storyQuery) else { continue }
+      let notebookTitle = story[storyTitle]
+      
+      // Search pages in this story
+      let pagesQuery = pagesTable.where(
+        pageStoryID == sid && 
+        (pageTitle.like(searchPattern) || pageBody.like(searchPattern))
+      )
+      
+      for page in try db.prepare(pagesQuery) {
+        pageResultCount += 1
+        div {
+          classs = "search-result"
+          a {
+            href = "/notebook/\(sid)/\(page[pageID])"
+            h4 {
+              inner = page[pageTitle]
+            }
+          }
+          p {
+            classs = "search-notebook"
+            inner = "in \(notebookTitle)"
+          }
+          // Show a snippet of the body
+          let bodyText = page[pageBody]
+          let snippet = String(bodyText.prefix(200))
+          p {
+            classs = "search-snippet"
+            inner = snippet + (bodyText.count > 200 ? "..." : "")
+          }
+        }
+      }
+    }
+    
+    if pageResultCount == 0 {
+      p {
+        inner = "No matching pages found."
+      }
+    }
+    
+    let totalResults = storyResultCount + pageResultCount
+    if totalResults > 0 {
+      p {
+        inner = "Found \(totalResults) result\(totalResults == 1 ? "" : "s") (\(storyResultCount) notebook\(storyResultCount == 1 ? "" : "s"), \(pageResultCount) page\(pageResultCount == 1 ? "" : "s"))."
+      }
+    }
+  } catch {
+    p {
+      inner = "An error occurred while searching."
+    }
+  }
 }
