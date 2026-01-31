@@ -403,25 +403,42 @@ enum Roles: Int {
 
 func showBookshelf(forUser user: Int) {
   do {
-    let user_stories = Table("user_stories");
-    let stories = Table("stories");
+    let user_stories = Table("user_stories")
+    let stories = Table("stories")
+    let users = Table("users")
 
     let storyID = Expression<Int>("storyID")
     let userID = Expression<Int>("userID")
     let role = Expression<Int>("role")
     let title = Expression<String>("title")
     let description = Expression<String>("description")
+    let userName = Expression<String>("name")
 
-    let db = try Connection("inklings.sqlite3");
+    let db = try Connection("inklings.sqlite3")
     let bookshelfStories = user_stories.where(userID == user && role != Roles.writer.rawValue)
     for story in try db.prepare(bookshelfStories) {
       let notebooks = stories.where(storyID == story[storyID])
       for notebook in try db.prepare(notebooks) {
+        // Find the writer(s) for this story
+        let writerQuery = user_stories.where(storyID == notebook[storyID] && role == Roles.writer.rawValue)
+        var writerNames: [String] = []
+        for writer in try db.prepare(writerQuery) {
+          let writerUserQuery = users.where(userID == writer[userID])
+          if let writerUser = try db.pluck(writerUserQuery) {
+            writerNames.append(writerUser[userName])
+          }
+        }
+        let writerString = writerNames.isEmpty ? "Unknown" : writerNames.joined(separator: ", ")
+        
         a {
           classs = "blocklink"
           href = "/notebook/\(notebook[storyID])"
           h2 {
             inner = notebook[title]
+          }
+          p {
+            classs = "writer-name"
+            inner = "by \(writerString)"
           }
           p {
             inner = notebook[description]

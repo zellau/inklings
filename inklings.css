@@ -146,3 +146,9 @@ nav input[type="text"]::placeholder {
   color: #AAAAAA;
   font-family: Handwriting;
 }
+
+.writer-name {
+  font-style: italic;
+  color: #666666;
+  margin-bottom: 5px;
+}
