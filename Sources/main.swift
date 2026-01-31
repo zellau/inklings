@@ -601,6 +601,7 @@ func showSearchResults(query: String, forUser user: Int) {
     let pagesTable = Table("pages")
     let storiesTable = Table("stories")
     let user_storiesTable = Table("user_stories")
+    let usersTable = Table("users")
     
     let pageID = Expression<Int>("pageID")
     let pageTitle = Expression<String>("title")
@@ -613,6 +614,8 @@ func showSearchResults(query: String, forUser user: Int) {
     
     let userID = Expression<Int>("userID")
     let usStoryID = Expression<Int>("storyID")
+    let role = Expression<Int>("role")
+    let userName = Expression<String>("name")
     
     let db = try Connection("inklings.sqlite3")
     
@@ -647,18 +650,31 @@ func showSearchResults(query: String, forUser user: Int) {
       
       for story in try db.prepare(storyQuery) {
         storyResultCount += 1
-        div {
-          classs = "search-result"
-          a {
-            href = "/notebook/\(sid)"
-            h4 {
-              inner = story[storyTitle]
-            }
+        
+        // Find the writer(s) for this story
+        let writerQuery = user_storiesTable.where(storyID == sid && role == Roles.writer.rawValue)
+        var writerNames: [String] = []
+        for writer in try db.prepare(writerQuery) {
+          let writerUserQuery = usersTable.where(userID == writer[userID])
+          if let writerUser = try db.pluck(writerUserQuery) {
+            writerNames.append(writerUser[userName])
+          }
+        }
+        let writerString = writerNames.isEmpty ? "Unknown" : writerNames.joined(separator: ", ")
+        
+        a {
+          classs = "blocklink"
+          href = "/notebook/\(sid)"
+          h2 {
+            inner = story[storyTitle]
+          }
+          p {
+            classs = "writer-name"
+            inner = "by \(writerString)"
           }
           let descText = story[storyDescription]
           let snippet = String(descText.prefix(200))
           p {
-            classs = "search-snippet"
             inner = snippet + (descText.count > 200 ? "..." : "")
           }
         }
@@ -682,6 +698,17 @@ func showSearchResults(query: String, forUser user: Int) {
       guard let story = try db.pluck(storyQuery) else { continue }
       let notebookTitle = story[storyTitle]
       
+      // Find the writer(s) for this story
+      let writerQuery = user_storiesTable.where(storyID == sid && role == Roles.writer.rawValue)
+      var writerNames: [String] = []
+      for writer in try db.prepare(writerQuery) {
+        let writerUserQuery = usersTable.where(userID == writer[userID])
+        if let writerUser = try db.pluck(writerUserQuery) {
+          writerNames.append(writerUser[userName])
+        }
+      }
+      let writerString = writerNames.isEmpty ? "Unknown" : writerNames.joined(separator: ", ")
+      
       // Search pages in this story
       let pagesQuery = pagesTable.where(
         pageStoryID == sid && 
@@ -690,23 +717,20 @@ func showSearchResults(query: String, forUser user: Int) {
       
       for page in try db.prepare(pagesQuery) {
         pageResultCount += 1
-        div {
-          classs = "search-result"
-          a {
-            href = "/notebook/\(sid)/\(page[pageID])"
-            h4 {
-              inner = page[pageTitle]
-            }
+        a {
+          classs = "blocklink"
+          href = "/notebook/\(sid)/\(page[pageID])"
+          h2 {
+            inner = page[pageTitle]
           }
           p {
-            classs = "search-notebook"
-            inner = "in \(notebookTitle)"
+            classs = "writer-name"
+            inner = "in \(notebookTitle) by \(writerString)"
           }
           // Show a snippet of the body
           let bodyText = page[pageBody]
           let snippet = String(bodyText.prefix(200))
           p {
-            classs = "search-snippet"
             inner = snippet + (bodyText.count > 200 ? "..." : "")
           }
         }
