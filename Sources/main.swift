@@ -190,6 +190,41 @@ server.POST["/search"] = { request in
     }(request)
   }
 
+server.POST["/notebook/:notebook/:page/comment"] = { request in
+    guard let notebook_id = Int("\(request.params[":notebook"]!)") else {
+      return HttpResponse.badRequest(.text("Invalid notebook"))
+    }
+    guard let page_id = Int("\(request.params[":page"]!)") else {
+      return HttpResponse.badRequest(.text("Invalid page"))
+    }
+    
+    var formData = [String: String]()
+    for (key, value) in request.parseUrlencodedForm() {
+      formData[key] = value
+    }
+    
+    let commentText = formData["comment"] ?? ""
+    let selectedText = formData["selectedText"]
+    let startOffset = formData["startOffset"].flatMap { Int($0) }
+    let endOffset = formData["endOffset"].flatMap { Int($0) }
+    
+    if !commentText.isEmpty {
+      saveComment(pageID: page_id, userID: 1, commentText: commentText, selectedText: selectedText, startOffset: startOffset, endOffset: endOffset)
+    }
+    
+    return scopes {
+      html {
+        head {
+          addStylesheet()
+        }
+        body {
+          makeHeader()
+          showPage(page_id, inNotebook: notebook_id, toUser: 1)
+        }
+      }
+    }(request)
+  }
+
 try server.start(8081)
 print("Server has started ( port = \(try server.port()) ). Try to connect now...")
 
@@ -302,34 +337,161 @@ func showPage(_ pageID: Int, inNotebook notebookID: Int, toUser user: Int) {
 
     if (userRole != 0) { //TODO: add more granularity to these roles
       div {
-        idd = "viewPage";
-        h2 {
-          inner = page[title]
-        }
-        if (userRole == Roles.writer.rawValue) {
-        a {
-            href = "/notebook/\(notebookID)/\(pageID)/edit"
-            inner = "Edit"
+        idd = "pageContainer"
+        // Left side: page content and comments
+        div {
+          idd = "leftColumn"
+          div {
+            idd = "viewPage"
+            h2 {
+              inner = page[title]
+            }
+            if (userRole == Roles.writer.rawValue) {
+              a {
+                href = "/notebook/\(notebookID)/\(pageID)/edit"
+                inner = "Edit"
+              }
+            }
+            p {
+              classs = "notebook"
+              idd = "pageBody"
+              inner = page[body]
+            }
+          }
+          div {
+            idd = "commentSection"
+            h3 {
+              inner = "Comments"
+            }
+            // Display existing comments
+            let comments = getComments(forPage: pageID)
+            for comment in comments {
+              div {
+                classs = "comment"
+                if let selText = comment.selectedText {
+                  div {
+                    classs = "comment-quote"
+                    inner = "\"\(selText)\""
+                  }
+                }
+                p {
+                  classs = "comment-text"
+                  inner = comment.commentText
+                }
+                p {
+                  classs = "comment-author"
+                  inner = "- \(comment.userName)"
+                }
+              }
+            }
+            if comments.isEmpty {
+              p {
+                classs = "no-comments"
+                inner = "No comments yet."
+              }
+            }
           }
         }
-        p {
-          classs = "notebook"
-          inner = page[body]
+        // Right side: sticky comment form
+        div {
+          idd = "commentFormContainer"
+          h4 {
+            inner = "Add a Comment"
+          }
+          div {
+            idd = "selectionInfo"
+            classs = "hidden"
+            span {
+              inner = "Commenting on: "
+            }
+            span {
+              idd = "selectedTextDisplay"
+            }
+            br {}
+            button {
+              type = "button"
+              idd = "clearSelection"
+              inner = "Clear selection"
+            }
+          }
+          form {
+            action = "/notebook/\(notebookID)/\(pageID)/comment"
+            method = "POST"
+            idd = "commentForm"
+            input {
+              type = "hidden"
+              name = "selectedText"
+              idd = "selectedTextInput"
+            }
+            input {
+              type = "hidden"
+              name = "startOffset"
+              idd = "startOffsetInput"
+            }
+            input {
+              type = "hidden"
+              name = "endOffset"
+              idd = "endOffsetInput"
+            }
+            textarea {
+              name = "comment"
+              idd = "commentBox"
+              placeholder = "Select text to comment on a specific part, or write a general comment."
+            }
+            br {}
+            input {
+              type = "submit"
+              value = "Post Comment"
+            }
+          }
         }
       }
-      div {
-        idd = "commentDiv";
-        form {
-          textarea {
-            name = "comment";
-            idd = "commentBox";
+      script {
+        inner = """
+        document.addEventListener('DOMContentLoaded', function() {
+          const pageBody = document.getElementById('pageBody');
+          const selectedTextInput = document.getElementById('selectedTextInput');
+          const startOffsetInput = document.getElementById('startOffsetInput');
+          const endOffsetInput = document.getElementById('endOffsetInput');
+          const selectionInfo = document.getElementById('selectionInfo');
+          const selectedTextDisplay = document.getElementById('selectedTextDisplay');
+          const clearSelectionBtn = document.getElementById('clearSelection');
+          
+          function clearSelection() {
+            selectedTextInput.value = '';
+            startOffsetInput.value = '';
+            endOffsetInput.value = '';
+            selectionInfo.classList.add('hidden');
           }
-          br {}
-          input {
-            type = "submit"
-            value = "Save"
-          }
-        }
+          
+          pageBody.addEventListener('mouseup', function() {
+            const selection = window.getSelection();
+            const selectedText = selection.toString().trim();
+            
+            if (selectedText.length > 0) {
+              const range = selection.getRangeAt(0);
+              const preSelectionRange = range.cloneRange();
+              preSelectionRange.selectNodeContents(pageBody);
+              preSelectionRange.setEnd(range.startContainer, range.startOffset);
+              const startOffset = preSelectionRange.toString().length;
+              const endOffset = startOffset + selectedText.length;
+              
+              selectedTextInput.value = selectedText;
+              startOffsetInput.value = startOffset;
+              endOffsetInput.value = endOffset;
+              selectedTextDisplay.textContent = '"' + (selectedText.length > 50 ? selectedText.substring(0, 50) + '...' : selectedText) + '"';
+              selectionInfo.classList.remove('hidden');
+            } else {
+              clearSelection();
+            }
+          });
+          
+          clearSelectionBtn.addEventListener('click', function() {
+            clearSelection();
+            window.getSelection().removeAllRanges();
+          });
+        });
+        """
       }
     } else {
       h3 {
@@ -556,6 +718,42 @@ func showNotebook(_ notebookID: Int, toUser user: Int) { //TODO: add user specif
    } catch {
     //log this probably
   }
+}
+
+func saveComment(pageID: Int, userID: Int, commentText: String, selectedText: String?, startOffset: Int?, endOffset: Int?) {
+  do {
+    let db = try Connection("inklings.sqlite3")
+    
+    if let selText = selectedText, let start = startOffset, let end = endOffset {
+      try db.run("INSERT INTO comments (pageID, userID, commentText, selectedText, startOffset, endOffset) VALUES (?, ?, ?, ?, ?, ?)",
+        pageID, userID, commentText, selText, start, end)
+    } else {
+      try db.run("INSERT INTO comments (pageID, userID, commentText) VALUES (?, ?, ?)",
+        pageID, userID, commentText)
+    }
+  } catch {
+    // log error
+  }
+}
+
+func getComments(forPage pageID: Int) -> [(id: Int, userName: String, commentText: String, selectedText: String?, startOffset: Int?, endOffset: Int?)] {
+  var comments: [(id: Int, userName: String, commentText: String, selectedText: String?, startOffset: Int?, endOffset: Int?)] = []
+  do {
+    let db = try Connection("inklings.sqlite3")
+    let stmt = try db.prepare("SELECT c.commentID, u.name, c.commentText, c.selectedText, c.startOffset, c.endOffset FROM comments c JOIN users u ON c.userID = u.userID WHERE c.pageID = ? ORDER BY c.createdAt DESC", pageID)
+    for row in stmt {
+      let id = row[0] as! Int64
+      let userName = row[1] as! String
+      let commentText = row[2] as! String
+      let selectedText = row[3] as? String
+      let startOffset = row[4] as? Int64
+      let endOffset = row[5] as? Int64
+      comments.append((id: Int(id), userName: userName, commentText: commentText, selectedText: selectedText, startOffset: startOffset.map { Int($0) }, endOffset: endOffset.map { Int($0) }))
+    }
+  } catch {
+    // log error
+  }
+  return comments
 }
 
 func editPage() {
