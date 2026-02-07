@@ -473,25 +473,20 @@ func showPage(_ pageID: Int, inNotebook notebookID: Int, toUser user: Int) {
             p {
               classs = "notebook"
               idd = "pageBody"
-              inner = page[body]
+              inner = renderBodyWithInlineComments(body: page[body], comments: comments)
             }
           }
           div {
             idd = "commentSection"
             h3 {
-              inner = "Comments"
+              inner = "General Comments"
             }
-            // Display existing comments
-            for comment in comments {
+            // Display only general comments (those without selected text) - inline comments appear in the body
+            let generalComments = comments.filter { $0.selectedText == nil }
+            for comment in generalComments {
               let fontFamily = comment.fontName.starts(with: "custom-") ? "'\(comment.fontName)'" : comment.fontName
               div {
                 classs = "comment"
-                if let selText = comment.selectedText {
-                  div {
-                    classs = "comment-quote"
-                    inner = "\"\(selText)\""
-                  }
-                }
                 p {
                   classs = "comment-text"
                   style = "color: \(comment.fontColor); font-family: \(fontFamily);"
@@ -504,10 +499,10 @@ func showPage(_ pageID: Int, inNotebook notebookID: Int, toUser user: Int) {
                 }
               }
             }
-            if comments.isEmpty {
+            if generalComments.isEmpty {
               p {
                 classs = "no-comments"
-                inner = "No comments yet."
+                inner = "No general comments yet."
               }
             }
           }
@@ -1362,6 +1357,58 @@ func getCustomFontByID(_ fontID: Int) -> (fontName: String, fileName: String)? {
         // log error
     }
     return nil
+}
+
+func renderBodyWithInlineComments(body: String, comments: [(id: Int, userName: String, commentText: String, selectedText: String?, startOffset: Int?, endOffset: Int?, fontColor: String, fontName: String)]) -> String {
+    // Filter to only comments with selected text and valid offsets
+    let inlineComments = comments.filter { $0.selectedText != nil && $0.startOffset != nil && $0.endOffset != nil }
+        .sorted { $0.startOffset! < $1.startOffset! }
+    
+    if inlineComments.isEmpty {
+        return body
+    }
+    
+    var result = ""
+    var currentIndex = 0
+    let bodyChars = Array(body)
+    
+    for comment in inlineComments {
+        let start = comment.startOffset!
+        let end = comment.endOffset!
+        
+        // Skip if offsets are out of bounds
+        if start < 0 || end > bodyChars.count || start >= end {
+            continue
+        }
+        
+        // Add text before this comment's selection
+        if currentIndex < start {
+            result += String(bodyChars[currentIndex..<start])
+        }
+        
+        // Skip if we've already passed this point (overlapping comments)
+        if currentIndex > start {
+            continue
+        }
+        
+        let fontFamily = comment.fontName.starts(with: "custom-") ? "'\(comment.fontName)'" : comment.fontName
+        
+        // Add the underlined selected text with the comment positioned below it
+        let selectedText = String(bodyChars[start..<end])
+        result += "<span class=\"comment-anchor\">"
+        result += "<span class=\"commented-text\" style=\"border-bottom: 2px solid \(comment.fontColor);\">\(selectedText)</span>"
+        result += "<span class=\"inline-comment\" style=\"color: \(comment.fontColor); font-family: \(fontFamily);\">\(comment.commentText) &mdash;\(comment.userName)</span>"
+        result += "</span>"
+        
+        currentIndex = end
+    }
+    
+    // Add any remaining text after the last comment
+    if currentIndex < bodyChars.count {
+        result += String(bodyChars[currentIndex...])
+    }
+    
+    return result
 }
 
 func getUserPreferences(forUser userID: Int) -> (color: String, font: String) {

@@ -53,7 +53,7 @@ nav span {
 }
 
 .notebook {
-	line-height: 2;
+	line-height: 3;
 }
 
 .blocklink {
@@ -404,4 +404,22 @@ nav input[type="text"]::placeholder {
     border-radius: 5px;
     font-family: Handwriting;
     font-size: 18px;
+}
+
+/* Inline comments */
+.comment-anchor {
+    position: relative;
+}
+
+.commented-text {
+    /* Underlined text that has a comment */
+}
+
+.inline-comment {
+    position: absolute;
+    left: 0;
+    top: 1.2em;
+    font-size: 14px;
+    white-space: nowrap;
+    font-style: italic;
 }
