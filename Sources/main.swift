@@ -430,6 +430,30 @@ func showPage(_ pageID: Int, inNotebook notebookID: Int, toUser user: Int) {
     let page = try db.pluck(query)!
 
     if (userRole != 0) { //TODO: add more granularity to these roles
+      // Fetch comments and generate custom font CSS
+      let comments = getComments(forPage: pageID)
+      var customFontCSS = ""
+      var seenFontIDs = Set<Int>()
+      for comment in comments {
+          if comment.fontName.starts(with: "custom-") {
+              if let fontIDStr = comment.fontName.split(separator: "-").last,
+                 let fontID = Int(fontIDStr),
+                 !seenFontIDs.contains(fontID) {
+                  seenFontIDs.insert(fontID)
+                  if let fontInfo = getCustomFontByID(fontID) {
+                      customFontCSS += "@font-face { font-family: '\(comment.fontName)'; src: url('/fonts/\(fontInfo.fileName)'); }\n"
+                  }
+              }
+          }
+      }
+      
+      // Add style tag for custom fonts
+      if !customFontCSS.isEmpty {
+          style {
+              inner = customFontCSS
+          }
+      }
+      
       div {
         idd = "pageContainer"
         // Left side: page content and comments
@@ -458,8 +482,8 @@ func showPage(_ pageID: Int, inNotebook notebookID: Int, toUser user: Int) {
               inner = "Comments"
             }
             // Display existing comments
-            let comments = getComments(forPage: pageID)
             for comment in comments {
+              let fontFamily = comment.fontName.starts(with: "custom-") ? "'\(comment.fontName)'" : comment.fontName
               div {
                 classs = "comment"
                 if let selText = comment.selectedText {
@@ -470,10 +494,12 @@ func showPage(_ pageID: Int, inNotebook notebookID: Int, toUser user: Int) {
                 }
                 p {
                   classs = "comment-text"
+                  style = "color: \(comment.fontColor); font-family: \(fontFamily);"
                   inner = comment.commentText
                 }
                 p {
                   classs = "comment-author"
+                  style = "color: \(comment.fontColor); font-family: \(fontFamily);"
                   inner = "- \(comment.userName)"
                 }
               }
@@ -830,11 +856,11 @@ func saveComment(pageID: Int, userID: Int, commentText: String, selectedText: St
   }
 }
 
-func getComments(forPage pageID: Int) -> [(id: Int, userName: String, commentText: String, selectedText: String?, startOffset: Int?, endOffset: Int?)] {
-  var comments: [(id: Int, userName: String, commentText: String, selectedText: String?, startOffset: Int?, endOffset: Int?)] = []
+func getComments(forPage pageID: Int) -> [(id: Int, userName: String, commentText: String, selectedText: String?, startOffset: Int?, endOffset: Int?, fontColor: String, fontName: String)] {
+  var comments: [(id: Int, userName: String, commentText: String, selectedText: String?, startOffset: Int?, endOffset: Int?, fontColor: String, fontName: String)] = []
   do {
     let db = try Connection("inklings.sqlite3")
-    let stmt = try db.prepare("SELECT c.commentID, u.name, c.commentText, c.selectedText, c.startOffset, c.endOffset FROM comments c JOIN users u ON c.userID = u.userID WHERE c.pageID = ? ORDER BY c.createdAt DESC", pageID)
+    let stmt = try db.prepare("SELECT c.commentID, u.name, c.commentText, c.selectedText, c.startOffset, c.endOffset, u.preferredColor, u.preferredFont FROM comments c JOIN users u ON c.userID = u.userID WHERE c.pageID = ? ORDER BY c.createdAt DESC", pageID)
     for row in stmt {
       let id = row[0] as! Int64
       let userName = row[1] as! String
@@ -842,7 +868,9 @@ func getComments(forPage pageID: Int) -> [(id: Int, userName: String, commentTex
       let selectedText = row[3] as? String
       let startOffset = row[4] as? Int64
       let endOffset = row[5] as? Int64
-      comments.append((id: Int(id), userName: userName, commentText: commentText, selectedText: selectedText, startOffset: startOffset.map { Int($0) }, endOffset: endOffset.map { Int($0) }))
+      let fontColor = row[6] as? String ?? "#333333"
+      let fontName = row[7] as? String ?? "Handwriting"
+      comments.append((id: Int(id), userName: userName, commentText: commentText, selectedText: selectedText, startOffset: startOffset.map { Int($0) }, endOffset: endOffset.map { Int($0) }, fontColor: fontColor, fontName: fontName))
     }
   } catch {
     // log error
@@ -1319,6 +1347,21 @@ func getCustomFonts(forUser userID: Int) -> [(fontID: Int, fontName: String, fil
         // log error
     }
     return fonts
+}
+
+func getCustomFontByID(_ fontID: Int) -> (fontName: String, fileName: String)? {
+    do {
+        let db = try Connection("inklings.sqlite3")
+        let stmt = try db.prepare("SELECT fontName, fileName FROM custom_fonts WHERE fontID = ?", fontID)
+        for row in stmt {
+            let name = row[0] as! String
+            let file = row[1] as! String
+            return (fontName: name, fileName: file)
+        }
+    } catch {
+        // log error
+    }
+    return nil
 }
 
 func getUserPreferences(forUser userID: Int) -> (color: String, font: String) {
