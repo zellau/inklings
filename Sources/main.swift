@@ -607,6 +607,7 @@ func showPage(_ pageID: Int, inNotebook notebookID: Int, toUser user: Int) {
           });
           
           // Toggle inline comment expansion on click
+          // Click on comment itself to expand it
           document.querySelectorAll('.inline-comment').forEach(function(comment) {
             comment.addEventListener('click', function(e) {
               e.stopPropagation();
@@ -618,9 +619,39 @@ func showPage(_ pageID: Int, inNotebook notebookID: Int, toUser user: Int) {
             });
           });
           
+          // Click on underlined text to expand associated comment(s)
+          document.querySelectorAll('.commented-text').forEach(function(underlined) {
+            underlined.style.cursor = 'pointer';
+            underlined.addEventListener('click', function(e) {
+              e.stopPropagation();
+              const commentIDs = underlined.getAttribute('data-comment-ids');
+              if (!commentIDs) return;
+              
+              const ids = commentIDs.split(',');
+              // Find all inline-comments with matching IDs
+              const comments = [];
+              ids.forEach(function(id) {
+                const comment = document.querySelector('.inline-comment[data-comment-id="' + id + '"]');
+                if (comment) comments.push(comment);
+              });
+              
+              if (comments.length === 0) return;
+              
+              // Close any other expanded comments
+              document.querySelectorAll('.inline-comment.expanded').forEach(function(other) {
+                if (!comments.includes(other)) other.classList.remove('expanded');
+              });
+              
+              // Toggle the associated comments
+              comments.forEach(function(comment) {
+                comment.classList.toggle('expanded');
+              });
+            });
+          });
+          
           // Close expanded comments when clicking elsewhere
           document.addEventListener('click', function(e) {
-            if (!e.target.closest('.inline-comment')) {
+            if (!e.target.closest('.comment-anchor')) {
               document.querySelectorAll('.inline-comment.expanded').forEach(function(c) {
                 c.classList.remove('expanded');
               });
@@ -1517,14 +1548,15 @@ func renderBodyWithInlineComments(body: String, comments: [(id: Int, userName: S
                 }
             }
             
-            // Build the HTML
+            // Build the HTML - add data-comment-ids to track which comments this segment belongs to
+            let commentIDsAttr = segment.commentIDs.map { String($0) }.joined(separator: ",")
             result += "<span class=\"comment-anchor\">"
-            result += "<span class=\"commented-text\" style=\"background: \(background); padding-bottom: \(paddingBottom)px;\">\(segmentText)</span>"
+            result += "<span class=\"commented-text\" data-comment-ids=\"\(commentIDsAttr)\" style=\"background: \(background); padding-bottom: \(paddingBottom)px;\">\(segmentText)</span>"
             
             // Add comment bubbles for comments that end here
             for comment in commentsToShow {
                 let fontFamily = comment.fontName.starts(with: "custom-") ? "'\(comment.fontName)'" : comment.fontName
-                result += "<span class=\"inline-comment\" style=\"color: \(comment.fontColor); font-family: \(fontFamily);\">\(comment.commentText) &mdash;\(comment.userName)</span>"
+                result += "<span class=\"inline-comment\" data-comment-id=\"\(comment.id)\" style=\"color: \(comment.fontColor); font-family: \(fontFamily);\">\(comment.commentText) &mdash;\(comment.userName)</span>"
             }
             
             result += "</span>"
