@@ -1360,41 +1360,54 @@ func getCustomFontByID(_ fontID: Int) -> (fontName: String, fileName: String)? {
 }
 
 func renderBodyWithInlineComments(body: String, comments: [(id: Int, userName: String, commentText: String, selectedText: String?, startOffset: Int?, endOffset: Int?, fontColor: String, fontName: String)]) -> String {
-    // Filter to only comments with selected text and valid offsets
-    let inlineComments = comments.filter { $0.selectedText != nil && $0.startOffset != nil && $0.endOffset != nil }
-        .sorted { $0.startOffset! < $1.startOffset! }
+    // Filter to only comments with selected text
+    let inlineComments = comments.filter { $0.selectedText != nil }
     
     if inlineComments.isEmpty {
         return body
     }
     
+    // Find each comment's selected text in the body and record positions
+    // This is more robust than using stored offsets which may be stale
+    var matches: [(start: Int, end: Int, comment: (id: Int, userName: String, commentText: String, selectedText: String?, startOffset: Int?, endOffset: Int?, fontColor: String, fontName: String))] = []
+    
+    for comment in inlineComments {
+        guard let selectedText = comment.selectedText else { continue }
+        
+        // Find this text in the body
+        if let range = body.range(of: selectedText) {
+            let start = body.distance(from: body.startIndex, to: range.lowerBound)
+            let end = body.distance(from: body.startIndex, to: range.upperBound)
+            matches.append((start: start, end: end, comment: comment))
+        }
+    }
+    
+    // Sort by position
+    matches.sort { $0.start < $1.start }
+    
+    // Build result
     var result = ""
     var currentIndex = 0
     let bodyChars = Array(body)
     
-    for comment in inlineComments {
-        let start = comment.startOffset!
-        let end = comment.endOffset!
+    for match in matches {
+        let start = match.start
+        let end = match.end
+        let comment = match.comment
         
-        // Skip if offsets are out of bounds
-        if start < 0 || end > bodyChars.count || start >= end {
-            continue
-        }
-        
-        // Add text before this comment's selection
-        if currentIndex < start {
-            result += String(bodyChars[currentIndex..<start])
-        }
-        
-        // Skip if we've already passed this point (overlapping comments)
+        // Skip if we've already passed this point (overlapping)
         if currentIndex > start {
             continue
         }
         
-        let fontFamily = comment.fontName.starts(with: "custom-") ? "'\(comment.fontName)'" : comment.fontName
+        // Add text before this selection
+        if currentIndex < start {
+            result += String(bodyChars[currentIndex..<start])
+        }
         
-        // Add the underlined selected text with the comment positioned below it
+        let fontFamily = comment.fontName.starts(with: "custom-") ? "'\(comment.fontName)'" : comment.fontName
         let selectedText = String(bodyChars[start..<end])
+        
         result += "<span class=\"comment-anchor\">"
         result += "<span class=\"commented-text\" style=\"border-bottom: 2px solid \(comment.fontColor);\">\(selectedText)</span>"
         result += "<span class=\"inline-comment\" style=\"color: \(comment.fontColor); font-family: \(fontFamily);\">\(comment.commentText) &mdash;\(comment.userName)</span>"
@@ -1403,7 +1416,7 @@ func renderBodyWithInlineComments(body: String, comments: [(id: Int, userName: S
         currentIndex = end
     }
     
-    // Add any remaining text after the last comment
+    // Add remaining text
     if currentIndex < bodyChars.count {
         result += String(bodyChars[currentIndex...])
     }
