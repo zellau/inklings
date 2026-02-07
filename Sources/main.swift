@@ -605,6 +605,27 @@ func showPage(_ pageID: Int, inNotebook notebookID: Int, toUser user: Int) {
             clearSelection();
             window.getSelection().removeAllRanges();
           });
+          
+          // Toggle inline comment expansion on click
+          document.querySelectorAll('.inline-comment').forEach(function(comment) {
+            comment.addEventListener('click', function(e) {
+              e.stopPropagation();
+              // Close any other expanded comments
+              document.querySelectorAll('.inline-comment.expanded').forEach(function(other) {
+                if (other !== comment) other.classList.remove('expanded');
+              });
+              comment.classList.toggle('expanded');
+            });
+          });
+          
+          // Close expanded comments when clicking elsewhere
+          document.addEventListener('click', function(e) {
+            if (!e.target.closest('.inline-comment')) {
+              document.querySelectorAll('.inline-comment.expanded').forEach(function(c) {
+                c.classList.remove('expanded');
+              });
+            }
+          });
         });
         """
       }
