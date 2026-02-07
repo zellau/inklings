@@ -657,6 +657,24 @@ func showPage(_ pageID: Int, inNotebook notebookID: Int, toUser user: Int) {
               });
             }
           });
+          
+          // Hover on underlined text highlights associated comments
+          document.querySelectorAll('.commented-text').forEach(function(underlined) {
+            underlined.addEventListener('mouseenter', function() {
+              const commentIDs = underlined.getAttribute('data-comment-ids');
+              if (!commentIDs) return;
+              const ids = commentIDs.split(',');
+              ids.forEach(function(id) {
+                const comment = document.querySelector('.inline-comment[data-comment-id="' + id + '"]');
+                if (comment) comment.classList.add('hovered');
+              });
+            });
+            underlined.addEventListener('mouseleave', function() {
+              document.querySelectorAll('.inline-comment.hovered').forEach(function(c) {
+                c.classList.remove('hovered');
+              });
+            });
+          });
         });
         """
       }

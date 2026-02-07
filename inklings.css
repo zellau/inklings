@@ -428,30 +428,18 @@ nav input[type="text"]::placeholder {
     text-overflow: ellipsis;
 }
 
-.inline-comment.expanded {
+.inline-comment.expanded,
+.inline-comment:hover,
+.inline-comment.hovered {
     white-space: normal;
     width: max-content;
     max-width: min(50ch, 80vw);
     overflow: visible;
     background: white;
     z-index: 100;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.25);
     line-height: 1;
-    padding: 2px;
-    margin-top: 11px;
-    margin-bottom: 3px;
-}
-
-.inline-comment:hover {
-    white-space: normal;
-    width: max-content;
-    max-width: min(50ch, 80vw);
-    overflow: visible;
-    background: white;
-    z-index: 100;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.25);
-    line-height: 1;
-    padding: 2px;
+    padding-top: 2px;
+    padding-bottom: 2px;
     margin-top: 11px;
     margin-bottom: 3px;
 }
