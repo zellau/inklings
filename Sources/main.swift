@@ -606,24 +606,39 @@ func showPage(_ pageID: Int, inNotebook notebookID: Int, toUser user: Int) {
             window.getSelection().removeAllRanges();
           });
           
+          // Track whether any comment is expanded (disables hover) - defined early for use below
+          let hasExpandedComment = false;
+          
+          function updateExpandedState() {
+            hasExpandedComment = document.querySelectorAll('.inline-comment.expanded').length > 0;
+          }
+          
           // Toggle inline comment expansion on click
           // Click on comment itself to expand it
           document.querySelectorAll('.inline-comment').forEach(function(comment) {
             comment.addEventListener('click', function(e) {
               e.stopPropagation();
               // Close any other expanded comments
+              document.querySelectorAll('.inline-comment.hovered').forEach(function(c) {
+                c.classList.remove('hovered');
+              });
               document.querySelectorAll('.inline-comment.expanded').forEach(function(other) {
                 if (other !== comment) other.classList.remove('expanded');
               });
               comment.classList.toggle('expanded');
+              updateExpandedState();
             });
           });
           
-          // Click on underlined text to expand associated comment(s)
+          // Click on underlined text to cycle through associated comments
           document.querySelectorAll('.commented-text').forEach(function(underlined) {
             underlined.style.cursor = 'pointer';
             underlined.addEventListener('click', function(e) {
               e.stopPropagation();
+              // Remove hover highlighting
+              document.querySelectorAll('.inline-comment.hovered').forEach(function(c) {
+                c.classList.remove('hovered');
+              });
               const commentIDs = underlined.getAttribute('data-comment-ids');
               if (!commentIDs) return;
               
@@ -637,15 +652,38 @@ func showPage(_ pageID: Int, inNotebook notebookID: Int, toUser user: Int) {
               
               if (comments.length === 0) return;
               
-              // Close any other expanded comments
+              // Close any comments not in this group
               document.querySelectorAll('.inline-comment.expanded').forEach(function(other) {
                 if (!comments.includes(other)) other.classList.remove('expanded');
               });
               
-              // Toggle the associated comments
-              comments.forEach(function(comment) {
-                comment.classList.toggle('expanded');
-              });
+              if (comments.length === 1) {
+                // Single comment: just toggle it
+                comments[0].classList.toggle('expanded');
+              } else {
+                // Multiple comments: cycle through them
+                // Find which one (if any) is currently expanded
+                let currentIndex = -1;
+                for (let i = 0; i < comments.length; i++) {
+                  if (comments[i].classList.contains('expanded')) {
+                    currentIndex = i;
+                    break;
+                  }
+                }
+                
+                // Collapse current, expand next (or first if none expanded, or none if at end)
+                if (currentIndex >= 0) {
+                  comments[currentIndex].classList.remove('expanded');
+                  if (currentIndex < comments.length - 1) {
+                    comments[currentIndex + 1].classList.add('expanded');
+                  }
+                  // If at last comment, next click collapses all (already done above)
+                } else {
+                  // None expanded, expand first
+                  comments[0].classList.add('expanded');
+                }
+              }
+              updateExpandedState();
             });
           });
           
@@ -655,12 +693,14 @@ func showPage(_ pageID: Int, inNotebook notebookID: Int, toUser user: Int) {
               document.querySelectorAll('.inline-comment.expanded').forEach(function(c) {
                 c.classList.remove('expanded');
               });
+              updateExpandedState();
             }
           });
           
-          // Hover on underlined text highlights associated comments
+          // Hover on underlined text highlights associated comments (only when nothing is expanded)
           document.querySelectorAll('.commented-text').forEach(function(underlined) {
             underlined.addEventListener('mouseenter', function() {
+              if (hasExpandedComment) return;
               const commentIDs = underlined.getAttribute('data-comment-ids');
               if (!commentIDs) return;
               const ids = commentIDs.split(',');
