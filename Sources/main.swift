@@ -146,17 +146,7 @@ server["/"] = scopes {
 
     savePage(page_id, inNotebook: notebook_id, title: title, textBody: textBody);
 
-    return scopes {
-      html {
-        head {
-          addStylesheet();
-        }
-        body {
-          makeHeader();
-          showPage(page_id, inNotebook: notebook_id, toUser: 1);
-        }
-      }
-    }(request)
+    return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(notebook_id)/\(page_id)"], nil)
   }
 
    server["/notebook/:notebook/new"] = { request in
@@ -199,6 +189,9 @@ server.POST["/search"] = { request in
 
 // Account page
 server["/account"] = { request in
+    // Get message from query params if present
+    let message = request.queryParams.first(where: { $0.0 == "message" })?.1.replacingOccurrences(of: "+", with: " ")
+    
     return scopes {
         html {
             head {
@@ -206,7 +199,7 @@ server["/account"] = { request in
             }
             body {
                 makeHeader()
-                showAccountPage(forUser: 1)
+                showAccountPage(forUser: 1, message: message)
             }
         }
     }(request)
@@ -223,17 +216,7 @@ server.POST["/account/save"] = { request in
     
     saveUserPreferences(userID: 1, color: color, font: font)
     
-    return scopes {
-        html {
-            head {
-                addStylesheet()
-            }
-            body {
-                makeHeader()
-                showAccountPage(forUser: 1, message: "Preferences saved!")
-            }
-        }
-    }(request)
+    return HttpResponse.raw(303, "See Other", ["Location": "/account?message=Preferences+saved!"], nil)
 }
 
 server.POST["/account/upload-font"] = { request in
@@ -252,7 +235,7 @@ server.POST["/account/upload-font"] = { request in
         }
     }
     
-    var message = "Please provide a font name and file."
+    var message = "Please+provide+a+font+name+and+file."
     
     if !fontName.isEmpty, let data = fontData, !data.isEmpty {
         // Generate unique filename
@@ -265,23 +248,13 @@ server.POST["/account/upload-font"] = { request in
         do {
             try Data(data).write(to: fileURL)
             saveCustomFont(userID: 1, fontName: fontName, fileName: safeFileName)
-            message = "Font '\(fontName)' uploaded successfully!"
+            message = "Font+uploaded+successfully!"
         } catch {
-            message = "Error saving font file."
+            message = "Error+saving+font+file."
         }
     }
     
-    return scopes {
-        html {
-            head {
-                addStylesheet()
-            }
-            body {
-                makeHeader()
-                showAccountPage(forUser: 1, message: message)
-            }
-        }
-    }(request)
+    return HttpResponse.raw(303, "See Other", ["Location": "/account?message=\(message)"], nil)
 }
 
 server.POST["/notebook/:notebook/:page/comment"] = { request in
@@ -306,17 +279,7 @@ server.POST["/notebook/:notebook/:page/comment"] = { request in
       saveComment(pageID: page_id, userID: 1, commentText: commentText, selectedText: selectedText, startOffset: startOffset, endOffset: endOffset)
     }
     
-    return scopes {
-      html {
-        head {
-          addStylesheet()
-        }
-        body {
-          makeHeader()
-          showPage(page_id, inNotebook: notebook_id, toUser: 1)
-        }
-      }
-    }(request)
+    return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(notebook_id)/\(page_id)"], nil)
   }
 
 try server.start(8081)
