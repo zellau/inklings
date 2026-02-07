@@ -18,6 +18,13 @@ server["/Handwriting-Regular.otf"] = shareFile("./Handwriting-Regular.otf")
 server["/Handwriting-Bold.otf"] = shareFile("./Handwriting-Bold.otf")
 server["/Handwriting-Italic.otf"] = shareFile("./Handwriting-Italic.otf")
 
+// Serve custom uploaded fonts
+server["/fonts/:filename"] = { request in
+    let filename = request.params[":filename"] ?? ""
+    let path = "./uploads/fonts/\(filename)"
+    return shareFile(path)(request)
+}
+
 server["/z"] = { _ in
   print("Restarting...")
   exit(35)
@@ -189,6 +196,93 @@ server.POST["/search"] = { request in
       }
     }(request)
   }
+
+// Account page
+server["/account"] = { request in
+    return scopes {
+        html {
+            head {
+                addStylesheet()
+            }
+            body {
+                makeHeader()
+                showAccountPage(forUser: 1)
+            }
+        }
+    }(request)
+}
+
+server.POST["/account/save"] = { request in
+    var formData = [String: String]()
+    for (key, value) in request.parseUrlencodedForm() {
+        formData[key] = value
+    }
+    
+    let color = formData["color"] ?? "#333333"
+    let font = formData["font"] ?? "Handwriting"
+    
+    saveUserPreferences(userID: 1, color: color, font: font)
+    
+    return scopes {
+        html {
+            head {
+                addStylesheet()
+            }
+            body {
+                makeHeader()
+                showAccountPage(forUser: 1, message: "Preferences saved!")
+            }
+        }
+    }(request)
+}
+
+server.POST["/account/upload-font"] = { request in
+    let multipart = request.parseMultiPartFormData()
+    
+    var fontName: String = ""
+    var fontData: [UInt8]? = nil
+    var originalFilename: String = ""
+    
+    for part in multipart {
+        if part.name == "fontName" {
+            fontName = String(bytes: part.body, encoding: .utf8) ?? ""
+        } else if part.name == "fontFile" {
+            fontData = part.body
+            originalFilename = part.fileName ?? "font.otf"
+        }
+    }
+    
+    var message = "Please provide a font name and file."
+    
+    if !fontName.isEmpty, let data = fontData, !data.isEmpty {
+        // Generate unique filename
+        let fileExtension = (originalFilename as NSString).pathExtension
+        let safeFileName = "\(UUID().uuidString).\(fileExtension)"
+        let filePath = "./uploads/fonts/\(safeFileName)"
+        
+        // Save the file
+        let fileURL = URL(fileURLWithPath: filePath)
+        do {
+            try Data(data).write(to: fileURL)
+            saveCustomFont(userID: 1, fontName: fontName, fileName: safeFileName)
+            message = "Font '\(fontName)' uploaded successfully!"
+        } catch {
+            message = "Error saving font file."
+        }
+    }
+    
+    return scopes {
+        html {
+            head {
+                addStylesheet()
+            }
+            body {
+                makeHeader()
+                showAccountPage(forUser: 1, message: message)
+            }
+        }
+    }(request)
+}
 
 server.POST["/notebook/:notebook/:page/comment"] = { request in
     guard let notebook_id = Int("\(request.params[":notebook"]!)") else {
@@ -952,4 +1046,292 @@ func showSearchResults(query: String, forUser user: Int) {
       inner = "An error occurred while searching."
     }
   }
+}
+
+func showAccountPage(forUser userID: Int, message: String? = nil) {
+    // Get user info and preferences first
+    let userInfo = getUserInfo(forUser: userID)
+    let currentColor = userInfo.color
+    let currentFont = userInfo.font
+    let userName = userInfo.name
+    let customFonts = getCustomFonts(forUser: userID)
+    
+    div {
+        idd = "accountPage"
+        
+        h2 { inner = "Account Settings" }
+        p { inner = "Welcome, \(userName)!" }
+        
+        if let msg = message {
+            div {
+                classs = "message"
+                inner = msg
+            }
+        }
+        
+        // Preview section
+        div {
+            idd = "previewSection"
+            h3 { inner = "Preview" }
+            div {
+                idd = "previewBox"
+                p {
+                    idd = "previewText"
+                    inner = "The quick brown fox jumps over the lazy dog."
+                }
+            }
+        }
+        
+        // Preferences form
+        form {
+            action = "/account/save"
+            method = "POST"
+            idd = "preferencesForm"
+            
+            h3 { inner = "Appearance Preferences" }
+            
+            // Color picker
+            div {
+                classs = "form-group"
+                label {
+                    forr = "colorPicker"
+                    inner = "Font Color:"
+                }
+                input {
+                    type = "color"
+                    name = "color"
+                    idd = "colorPicker"
+                    value = currentColor
+                }
+                span {
+                    idd = "colorValue"
+                    inner = currentColor
+                }
+            }
+            
+            // Font selector
+            div {
+                classs = "form-group"
+                label {
+                    forr = "fontSelect"
+                    inner = "Font:"
+                }
+                select {
+                    name = "font"
+                    idd = "fontSelect"
+                    
+                    option {
+                        value = "Handwriting"
+                        if currentFont == "Handwriting" {
+                            selected = "selected"
+                        }
+                        inner = "Handwriting"
+                    }
+                    option {
+                        value = "Georgia"
+                        if currentFont == "Georgia" {
+                            selected = "selected"
+                        }
+                        inner = "Georgia"
+                    }
+                    option {
+                        value = "Arial"
+                        if currentFont == "Arial" {
+                            selected = "selected"
+                        }
+                        inner = "Arial"
+                    }
+                    option {
+                        value = "Courier New"
+                        if currentFont == "Courier New" {
+                            selected = "selected"
+                        }
+                        inner = "Courier New"
+                    }
+                    
+                    // Custom fonts
+                    for customFont in customFonts {
+                        option {
+                            value = "custom-\(customFont.fontID)"
+                            if currentFont == "custom-\(customFont.fontID)" {
+                                selected = "selected"
+                            }
+                            inner = "\(customFont.fontName) (custom)"
+                        }
+                    }
+                }
+            }
+            
+            input {
+                type = "submit"
+                value = "Save Preferences"
+                classs = "save-button"
+            }
+        }
+        
+        // Font upload form
+        form {
+            action = "/account/upload-font"
+            method = "POST"
+            enctype = "multipart/form-data"
+            idd = "uploadFontForm"
+            
+            h3 { inner = "Upload Custom Font" }
+            
+            div {
+                classs = "form-group"
+                label {
+                    forr = "fontNameInput"
+                    inner = "Font Name:"
+                }
+                input {
+                    type = "text"
+                    name = "fontName"
+                    idd = "fontNameInput"
+                    placeholder = "My Custom Font"
+                }
+            }
+            
+            div {
+                classs = "form-group"
+                label {
+                    forr = "fontFileInput"
+                    inner = "Font File (.otf, .ttf, .woff, .woff2):"
+                }
+                input {
+                    type = "file"
+                    name = "fontFile"
+                    idd = "fontFileInput"
+                }
+            }
+            
+            input {
+                type = "submit"
+                value = "Upload Font"
+                classs = "upload-button"
+            }
+        }
+        
+        // List of custom fonts
+        if !customFonts.isEmpty {
+            div {
+                idd = "customFontsList"
+                h3 { inner = "Your Custom Fonts" }
+                ul {
+                    for customFont in customFonts {
+                        li { inner = customFont.fontName }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Generate @font-face rules for custom fonts
+    var fontFaceCSS = ""
+    for customFont in customFonts {
+        fontFaceCSS += "@font-face { font-family: 'custom-\(customFont.fontID)'; src: url('/fonts/\(customFont.fileName)'); }\n"
+    }
+    
+    // JavaScript for live preview
+    script {
+        inner = """
+        document.addEventListener('DOMContentLoaded', function() {
+            // Inject custom font-face rules
+            const styleSheet = document.createElement('style');
+            styleSheet.textContent = `\(fontFaceCSS)`;
+            document.head.appendChild(styleSheet);
+            
+            const colorPicker = document.getElementById('colorPicker');
+            const colorValue = document.getElementById('colorValue');
+            const fontSelect = document.getElementById('fontSelect');
+            const previewBox = document.getElementById('previewBox');
+            const previewText = document.getElementById('previewText');
+            
+            // Add accept attribute to file input
+            const fontFileInput = document.getElementById('fontFileInput');
+            if (fontFileInput) fontFileInput.setAttribute('accept', '.otf,.ttf,.woff,.woff2');
+            
+            function updatePreview() {
+                const color = colorPicker.value;
+                const font = fontSelect.value;
+                
+                colorValue.textContent = color;
+                previewText.style.color = color;
+                previewText.style.fontFamily = font;
+            }
+            
+            colorPicker.addEventListener('input', updatePreview);
+            fontSelect.addEventListener('change', updatePreview);
+            
+            // Initial preview
+            updatePreview();
+        });
+        """
+    }
+}
+
+func getUserInfo(forUser userID: Int) -> (name: String, color: String, font: String) {
+    do {
+        let db = try Connection("inklings.sqlite3")
+        let stmt = try db.prepare("SELECT name, preferredColor, preferredFont FROM users WHERE userID = ?", userID)
+        for row in stmt {
+            let name = row[0] as? String ?? "User"
+            let color = row[1] as? String ?? "#333333"
+            let font = row[2] as? String ?? "Handwriting"
+            return (name: name, color: color, font: font)
+        }
+    } catch {
+        // log error
+    }
+    return (name: "User", color: "#333333", font: "Handwriting")
+}
+
+func saveUserPreferences(userID: Int, color: String, font: String) {
+    do {
+        let db = try Connection("inklings.sqlite3")
+        try db.run("UPDATE users SET preferredColor = ?, preferredFont = ? WHERE userID = ?", color, font, userID)
+    } catch {
+        // log error
+    }
+}
+
+func saveCustomFont(userID: Int, fontName: String, fileName: String) {
+    do {
+        let db = try Connection("inklings.sqlite3")
+        try db.run("INSERT INTO custom_fonts (userID, fontName, fileName) VALUES (?, ?, ?)", userID, fontName, fileName)
+    } catch {
+        // log error
+    }
+}
+
+func getCustomFonts(forUser userID: Int) -> [(fontID: Int, fontName: String, fileName: String)] {
+    var fonts: [(fontID: Int, fontName: String, fileName: String)] = []
+    do {
+        let db = try Connection("inklings.sqlite3")
+        let stmt = try db.prepare("SELECT fontID, fontName, fileName FROM custom_fonts WHERE userID = ? ORDER BY fontName", userID)
+        for row in stmt {
+            let id = row[0] as! Int64
+            let name = row[1] as! String
+            let file = row[2] as! String
+            fonts.append((fontID: Int(id), fontName: name, fileName: file))
+        }
+    } catch {
+        // log error
+    }
+    return fonts
+}
+
+func getUserPreferences(forUser userID: Int) -> (color: String, font: String) {
+    do {
+        let db = try Connection("inklings.sqlite3")
+        let stmt = try db.prepare("SELECT preferredColor, preferredFont FROM users WHERE userID = ?", userID)
+        for row in stmt {
+            let color = row[0] as? String ?? "#333333"
+            let font = row[1] as? String ?? "Handwriting"
+            return (color: color, font: font)
+        }
+    } catch {
+        // log error
+    }
+    return (color: "#333333", font: "Handwriting")
 }
