@@ -66,10 +66,84 @@ server["/"] = scopes {
     }
   }
 
+   // Handle notebook creation
+   server.POST["/notebook/create"] = { request in
+     var formData = [String: String]()
+     for (key, value) in request.parseUrlencodedForm() {
+       formData[key] = value
+     }
+     
+     let title = formData["title"] ?? "Untitled"
+     let description = formData["description"] ?? ""
+     
+     let newNotebookID = createNotebook(title: title, description: description, userID: 1)
+     
+     return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(newNotebookID)"], nil)
+   }
+
    server["/notebook/:notebook"] = { request in
-     guard let notebook_id = Int("\(request.params[":notebook"]!)") else {
+     let notebookParam = request.params[":notebook"] ?? ""
+     
+     // Handle /notebook/new specially
+     if notebookParam == "new" {
+       return scopes {
+         html {
+           head {
+             addStylesheet()
+           }
+           body {
+             makeHeader()
+             div {
+               idd = "newNotebookPage"
+               classs = "accountPage"
+               h2 {
+                 inner = "Create New Notebook"
+               }
+               form {
+                 action = "/notebook/create"
+                 method = "POST"
+                 div {
+                   classs = "form-group"
+                   label {
+                     forr = "title"
+                     inner = "Title:"
+                   }
+                   input {
+                     type = "text"
+                     name = "title"
+                     idd = "title"
+                     placeholder = "Enter notebook title"
+                   }
+                 }
+                 div {
+                   classs = "form-group"
+                   label {
+                     forr = "description"
+                     inner = "Description:"
+                   }
+                   textarea {
+                     name = "description"
+                     idd = "description"
+                     placeholder = "Enter a description for your notebook"
+                     rows = "4"
+                     style = "width: 50%;"
+                   }
+                 }
+                 button {
+                   type = "submit"
+                   classs = "save-button"
+                   inner = "Create Notebook"
+                 }
+               }
+             }
+           }
+         }
+       }(request)
+     }
+     
+     guard let notebook_id = Int(notebookParam) else {
        //TODO: deal with this
-       return HttpResponse.ok(.text("\(request.params[":notebook"])"))
+       return HttpResponse.ok(.text("\(notebookParam)"))
      }
      return scopes {
       html {
@@ -149,6 +223,7 @@ server["/"] = scopes {
     return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(notebook_id)/\(page_id)"], nil)
   }
 
+   // Create new notebook page
    server["/notebook/:notebook/new"] = { request in
      guard let notebook_id = Int("\(request.params[":notebook"]!)") else {
        //TODO: deal with this
@@ -906,6 +981,29 @@ func showNotebook(_ notebookID: Int, toUser user: Int) { //TODO: add user specif
    } catch {
     //log this probably
   }
+}
+
+func createNotebook(title: String, description: String, userID: Int) -> Int {
+    do {
+        let db = try Connection("inklings.sqlite3")
+        
+        // Get the next storyID
+        let maxIDQuery = "SELECT COALESCE(MAX(storyID), 0) + 1 FROM stories"
+        let newID = try db.scalar(maxIDQuery) as! Int64
+        
+        // Insert the new story/notebook
+        let insertStory = "INSERT INTO stories (storyID, title, description) VALUES (?, ?, ?)"
+        try db.run(insertStory, Int64(newID), title, description)
+        
+        // Create user_stories entry with writer role (1)
+        let insertUserStory = "INSERT INTO user_stories (userID, storyID, role) VALUES (?, ?, ?)"
+        try db.run(insertUserStory, Int64(userID), Int64(newID), Int64(Roles.writer.rawValue))
+        
+        return Int(newID)
+    } catch {
+        print("Error creating notebook: \(error)")
+        return 0
+    }
 }
 
 func saveComment(pageID: Int, userID: Int, commentText: String, selectedText: String?, startOffset: Int?, endOffset: Int?) {
