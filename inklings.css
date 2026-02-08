@@ -451,3 +451,29 @@ nav input[type="text"]::placeholder {
     margin-top: 11px;
     margin-bottom: 3px;
 }
+
+/* Logout section */
+#logoutSection {
+    margin-top: 50px;
+    padding-top: 30px;
+    border-top: 1px solid #cccccc;
+    text-align: center;
+}
+
+.logout-button {
+    margin-top: 20px;
+    background-color: #333333;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-family: Handwriting;
+    font-size: 20px;
+    transition: background-color 0.3s ease;
+    padding: 12px 30px;
+    text-decoration: none;
+}
+
+.logout-button:hover {
+    background-color: #c82333;
+}

@@ -1508,6 +1508,16 @@ func showAccountPage(forUser userID: Int, message: String? = nil) {
                 }
             }
         }
+        
+        // Logout button
+        div {
+            idd = "logoutSection"
+            a {
+                href = "/logout"
+                classs = "logout-button"
+                inner = "Log out"
+            }
+        }
     }
     
     // Generate @font-face rules for custom fonts
