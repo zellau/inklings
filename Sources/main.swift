@@ -107,31 +107,21 @@ server["/"] = scopes {
                  method = "POST"
                  div {
                    classs = "form-group"
-                   label {
-                     forr = "title"
-                     style = "font-family: system-ui, serif;"
-                     inner = "Title:"
-                   }
                    input {
                      type = "text"
                      name = "title"
                      idd = "title"
-                     placeholder = "Enter notebook title"
+                     placeholder = "Title"
                      style = inputStyle
                    }
                  }
                  div {
                    classs = "form-group"
                    style = "display: flex; align-items: flex-start;"
-                   label {
-                     forr = "description"
-                     style = "font-family: system-ui, serif; margin-top: 4px;"
-                     inner = "Description:"
-                   }
                    textarea {
                      name = "description"
                      idd = "description"
-                     placeholder = "Enter a description for your notebook"
+                     placeholder = "Give a description for your notebook"
                      rows = "4"
                      style = "width: 50%; \(inputStyle)"
                    }
@@ -492,6 +482,10 @@ func showPage(_ pageID: Int, inNotebook notebookID: Int, toUser user: Int) {
               }
           }
       }
+
+      let userPrefs = getUserPreferences(forUser: user)
+      let inputStyle = "font-family: \(userPrefs.font); color: \(userPrefs.color);"
+
       
       // Add style tag for custom fonts
       if !customFontCSS.isEmpty {
@@ -597,6 +591,7 @@ func showPage(_ pageID: Int, inNotebook notebookID: Int, toUser user: Int) {
             textarea {
               name = "comment"
               idd = "commentBox"
+              style = inputStyle
               placeholder = "Select text to comment on a specific part, or write a general comment."
             }
             br {}
@@ -777,12 +772,17 @@ func showPage(_ pageID: Int, inNotebook notebookID: Int, toUser user: Int) {
 func editPage(_ pageID: Int?, inNotebook notebookID: Int) {
   do {
     let pages = Table("pages");
+    let notebooks = Table("stories");
     let id = Expression<Int>("pageID")
+    
     let titleCol = Expression<String>("title")
     let bodyCol = Expression<String>("body")
 
     let db = try Connection("inklings.sqlite3");
-    
+
+    let userPrefs = getUserPreferences(forUser: 1)
+    let inputStyle = "font-family: \(userPrefs.font); color: \(userPrefs.color);"
+
     var currentTitle = ""
     var currentBody = ""
     var formAction = "/notebook/\(notebookID)/page/create"
@@ -801,22 +801,28 @@ func editPage(_ pageID: Int?, inNotebook notebookID: Int) {
     form {
       action = formAction
       method = "POST"
+      style = "margin-top: 5px;"
       input {
         name = "title"
         type = "text"
         idd = "title"
+        placeholder = "Title"
+        style = inputStyle
         value = currentTitle
       }
       br {}
       textarea {
         name = "body"
         idd = "body"
+        placeholder = "Body"
         inner = currentBody
+        style = inputStyle
       }
       br {}
-      input {
+      button {
         type = "submit"
-        value = "Save"
+        classs = "save-button"
+        inner = "Save"
       }
     }
    } catch {

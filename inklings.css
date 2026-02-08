@@ -85,9 +85,9 @@ nav form {
   font-size:20px;
 }
 
-#body {
-  width:80%;
-  height: 60vh;
+textarea {
+  width:50%;
+  height: 50vh;
 }
 
 #pageContainer {
