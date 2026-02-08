@@ -86,6 +86,9 @@ server["/"] = scopes {
      
      // Handle /notebook/new specially
      if notebookParam == "new" {
+       let userPrefs = getUserPreferences(forUser: 1)
+       let inputStyle = "font-family: \(userPrefs.font); color: \(userPrefs.color);"
+       
        return scopes {
          html {
            head {
@@ -106,6 +109,7 @@ server["/"] = scopes {
                    classs = "form-group"
                    label {
                      forr = "title"
+                     style = "font-family: system-ui, serif;"
                      inner = "Title:"
                    }
                    input {
@@ -113,12 +117,15 @@ server["/"] = scopes {
                      name = "title"
                      idd = "title"
                      placeholder = "Enter notebook title"
+                     style = inputStyle
                    }
                  }
                  div {
                    classs = "form-group"
+                   style = "display: flex; align-items: flex-start;"
                    label {
                      forr = "description"
+                     style = "font-family: system-ui, serif; margin-top: 4px;"
                      inner = "Description:"
                    }
                    textarea {
@@ -126,7 +133,7 @@ server["/"] = scopes {
                      idd = "description"
                      placeholder = "Enter a description for your notebook"
                      rows = "4"
-                     style = "width: 50%;"
+                     style = "width: 50%; \(inputStyle)"
                    }
                  }
                  button {
