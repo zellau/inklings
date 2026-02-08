@@ -458,22 +458,39 @@ nav input[type="text"]::placeholder {
     padding-top: 30px;
     border-top: 1px solid #cccccc;
     text-align: center;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10%;
+}
+
+.logout-form,
+.reset-token-form {
+    display: inline-block;
+    margin: 0;
+}
+
+.logout-button,
+.reset-token-button {
+  padding: 12px 30px;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: Handwriting;
+  font-size: 20px;
+  transition: background-color 0.3s ease;
 }
 
 .logout-button {
-    margin-top: 20px;
     background-color: #333333;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    font-family: Handwriting;
-    font-size: 20px;
-    transition: background-color 0.3s ease;
-    padding: 12px 30px;
-    text-decoration: none;
 }
 
-.logout-button:hover {
+.reset-token-button {
+    background-color: #dc3545;
+}
+
+.logout-button:hover,
+.reset-token-button:hover {
     background-color: #c82333;
 }

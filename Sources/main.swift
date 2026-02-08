@@ -64,7 +64,7 @@ server["/login"] = { request in
 }
 
 // Logout route
-server["/logout"] = { request in
+server.POST["/logout"] = { request in
     return HttpResponse.raw(303, "See Other", [
         "Location": "/",
         "Set-Cookie": "session=; Path=/; HttpOnly; Max-Age=0"
@@ -402,6 +402,30 @@ server.POST["/account/upload-font"] = { request in
     }
     
     return HttpResponse.raw(303, "See Other", ["Location": "/account?message=\(message)"], nil)
+}
+
+server.POST["/account/reset-token"] = { request in
+    guard let userID = getCurrentUser(from: request) else {
+        return HttpResponse.raw(303, "See Other", ["Location": "/"], nil)
+    }
+    
+    // Generate new magic token
+    let newToken = UUID().uuidString
+    
+    // Update user's magic token and delete all their sessions
+    do {
+        let db = try Connection("inklings.sqlite3")
+        try db.run("UPDATE users SET magicToken = ? WHERE userID = ?", newToken, userID)
+        try db.run("DELETE FROM sessions WHERE userID = ?", userID)
+    } catch {
+        return HttpResponse.raw(303, "See Other", ["Location": "/account?message=Error+resetting+token"], nil)
+    }
+    
+    // Clear session cookie and redirect to login page with message
+    return HttpResponse.raw(303, "See Other", [
+        "Location": "/",
+        "Set-Cookie": "session=; Path=/; HttpOnly; Max-Age=0"
+    ], nil)
 }
 
 server.POST["/notebook/:notebook/:page/comment"] = { request in
@@ -1509,13 +1533,28 @@ func showAccountPage(forUser userID: Int, message: String? = nil) {
             }
         }
         
-        // Logout button
+        // Logout and reset buttons
         div {
             idd = "logoutSection"
-            a {
-                href = "/logout"
-                classs = "logout-button"
-                inner = "Log out"
+            form {
+                action = "/logout"
+                method = "POST"
+                classs = "logout-form"
+                button {
+                    type = "submit"
+                    classs = "logout-button"
+                    inner = "Log out"
+                }
+            }
+            form {
+                action = "/account/reset-token"
+                method = "POST"
+                classs = "reset-token-form"
+                button {
+                    type = "submit"
+                    classs = "reset-token-button"
+                    inner = "Reset sign-in link"
+                }
             }
         }
     }
