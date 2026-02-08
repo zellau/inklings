@@ -30,6 +30,47 @@ server["/z"] = { _ in
   exit(35)
 }
 
+// Login route
+server["/login"] = { request in
+    if let token = request.queryParams.first(where: { $0.0 == "token" })?.1 {
+        if let userID = getUserByMagicToken(token) {
+            let sessionID = createSession(forUser: userID)
+            return HttpResponse.raw(303, "See Other", [
+                "Location": "/",
+                "Set-Cookie": "session=\(sessionID); Path=/; HttpOnly; Max-Age=2592000"
+            ], nil)
+        }
+    }
+    // Invalid or missing token
+    return scopes {
+        html {
+            head {
+                addStylesheet()
+            }
+            body {
+                makeHeader()
+                div {
+                    classs = "accountPage"
+                    h2 {
+                        inner = "Login"
+                    }
+                    p {
+                        inner = "Invalid or missing login token."
+                    }
+                }
+            }
+        }
+    }(request)
+}
+
+// Logout route
+server["/logout"] = { request in
+    return HttpResponse.raw(303, "See Other", [
+        "Location": "/",
+        "Set-Cookie": "session=; Path=/; HttpOnly; Max-Age=0"
+    ], nil)
+}
+
 server["/"] = scopes { 
     html {
       head {
@@ -42,28 +83,34 @@ server["/"] = scopes {
     }
   }
 
-  server["bookshelf"] = scopes {
-    html {
-      head {
-        addStylesheet();
+  server["bookshelf"] = { request in
+    let userID = getCurrentUser(from: request) ?? 0
+    return scopes {
+      html {
+        head {
+          addStylesheet()
+        }
+        body {
+          makeHeader()
+          showBookshelf(forUser: userID)
+        }
       }
-    }
-    body {
-      makeHeader();
-      showBookshelf(forUser: 1);
-    }
+    }(request)
   }
 
-  server["/notebooks"] = scopes { 
-    html {
-      head {
-        addStylesheet();
+  server["/notebooks"] = { request in
+    let userID = getCurrentUser(from: request) ?? 0
+    return scopes {
+      html {
+        head {
+          addStylesheet()
+        }
+        body {
+          makeHeader()
+          showNotebooks(forUser: userID)
+        }
       }
-      body {
-        makeHeader();
-        showNotebooks(forUser: 1);
-      }
-    }
+    }(request)
   }
 
    // Handle notebook creation
@@ -76,7 +123,8 @@ server["/"] = scopes {
      let title = formData["title"] ?? "Untitled"
      let description = formData["description"] ?? ""
      
-     let newNotebookID = createNotebook(title: title, description: description, userID: 1)
+     let userID = getCurrentUser(from: request) ?? 0
+     let newNotebookID = createNotebook(title: title, description: description, userID: userID)
      
      return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(newNotebookID)"], nil)
    }
@@ -86,7 +134,8 @@ server["/"] = scopes {
      
      // Handle /notebook/new specially
      if notebookParam == "new" {
-       let userPrefs = getUserPreferences(forUser: 1)
+       let userID = getCurrentUser(from: request) ?? 0
+       let userPrefs = getUserPreferences(forUser: userID)
        let inputStyle = "font-family: \(userPrefs.font); color: \(userPrefs.color);"
        
        return scopes {
@@ -165,7 +214,8 @@ server["/"] = scopes {
      
      // Handle /notebook/:notebook/new specially
      if pageParam == "new" {
-      let userPrefs = getUserPreferences(forUser: 1)
+      let userID = getCurrentUser(from: request) ?? 0
+      let userPrefs = getUserPreferences(forUser: userID)
 
       return scopes {
         html {
@@ -174,7 +224,7 @@ server["/"] = scopes {
           }
           body {
             makeHeader();
-            editPage(nil, inNotebook: notebook_id);
+            editPage(nil, inNotebook: notebook_id, forUser: userID);
           }
       }
      }(request)
@@ -198,6 +248,7 @@ server["/"] = scopes {
    }
 
    server["/notebook/:notebook/:page/edit"] = { request in
+     let userID = getCurrentUser(from: request) ?? 0
      guard let notebook_id = Int("\(request.params[":notebook"]!)") else {
        //TODO: deal with this
        return HttpResponse.ok(.text("\(request.params[":notebook"])"))
@@ -213,7 +264,7 @@ server["/"] = scopes {
         }
         body {
           makeHeader();
-          editPage(page_id, inNotebook: notebook_id);
+          editPage(page_id, inNotebook: notebook_id, forUser: userID);
         }
       }
      }(request)
@@ -263,6 +314,7 @@ server.POST["/search"] = { request in
       formData[key] = value
     }
     let query = formData["q"] ?? ""
+    let userID = getCurrentUser(from: request) ?? 0
     
     return scopes {
       html {
@@ -271,7 +323,7 @@ server.POST["/search"] = { request in
         }
         body {
           makeHeader()
-          showSearchResults(query: query, forUser: 1)
+          showSearchResults(query: query, forUser: userID)
         }
       }
     }(request)
@@ -279,6 +331,7 @@ server.POST["/search"] = { request in
 
 // Account page
 server["/account"] = { request in
+    let userID = getCurrentUser(from: request) ?? 0
     // Get message from query params if present
     let message = request.queryParams.first(where: { $0.0 == "message" })?.1.replacingOccurrences(of: "+", with: " ")
     
@@ -289,13 +342,14 @@ server["/account"] = { request in
             }
             body {
                 makeHeader()
-                showAccountPage(forUser: 1, message: message)
+                showAccountPage(forUser: userID, message: message)
             }
         }
     }(request)
 }
 
 server.POST["/account/save"] = { request in
+    let userID = getCurrentUser(from: request) ?? 0
     var formData = [String: String]()
     for (key, value) in request.parseUrlencodedForm() {
         formData[key] = value
@@ -304,12 +358,13 @@ server.POST["/account/save"] = { request in
     let color = formData["color"] ?? "#333333"
     let font = formData["font"] ?? "Handwriting"
     
-    saveUserPreferences(userID: 1, color: color, font: font)
+    saveUserPreferences(userID: userID, color: color, font: font)
     
     return HttpResponse.raw(303, "See Other", ["Location": "/account?message=Preferences+saved!"], nil)
 }
 
 server.POST["/account/upload-font"] = { request in
+    let userID = getCurrentUser(from: request) ?? 0
     let multipart = request.parseMultiPartFormData()
     
     var fontName: String = ""
@@ -337,7 +392,7 @@ server.POST["/account/upload-font"] = { request in
         let fileURL = URL(fileURLWithPath: filePath)
         do {
             try Data(data).write(to: fileURL)
-            saveCustomFont(userID: 1, fontName: fontName, fileName: safeFileName)
+            saveCustomFont(userID: userID, fontName: fontName, fileName: safeFileName)
             message = "Font+uploaded+successfully!"
         } catch {
             message = "Error+saving+font+file."
@@ -366,7 +421,8 @@ server.POST["/notebook/:notebook/:page/comment"] = { request in
     let endOffset = formData["endOffset"].flatMap { Int($0) }
     
     if !commentText.isEmpty {
-      saveComment(pageID: page_id, userID: 1, commentText: commentText, selectedText: selectedText, startOffset: startOffset, endOffset: endOffset)
+      let userID = getCurrentUser(from: request) ?? 0
+      saveComment(pageID: page_id, userID: userID, commentText: commentText, selectedText: selectedText, startOffset: startOffset, endOffset: endOffset)
     }
     
     return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(notebook_id)/\(page_id)"], nil)
@@ -785,7 +841,7 @@ func showPage(_ pageID: Int, inNotebook notebookID: Int, toUser user: Int) {
   }
 }
 
-func editPage(_ pageID: Int?, inNotebook notebookID: Int) {
+func editPage(_ pageID: Int?, inNotebook notebookID: Int, forUser userID: Int) {
   do {
     let pages = Table("pages");
     let notebooks = Table("stories");
@@ -796,7 +852,7 @@ func editPage(_ pageID: Int?, inNotebook notebookID: Int) {
 
     let db = try Connection("inklings.sqlite3");
 
-    let userPrefs = getUserPreferences(forUser: 1)
+    let userPrefs = getUserPreferences(forUser: userID)
     let inputStyle = "font-family: \(userPrefs.font); color: \(userPrefs.color);"
 
     var currentTitle = ""
@@ -1730,6 +1786,80 @@ func renderBodyWithInlineComments(_ bodyUnformatted: String, comments: [(id: Int
     }
     
     return result
+}
+
+// Session Management
+func createSession(forUser userID: Int) -> String {
+    let sessionID = UUID().uuidString
+    let expiresAt = Date().addingTimeInterval(60 * 60 * 24 * 30) // 30 days
+    let formatter = DateFormatter()
+    formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+    let expiresAtString = formatter.string(from: expiresAt)
+    
+    do {
+        let db = try Connection("inklings.sqlite3")
+        try db.run("INSERT INTO sessions (sessionID, userID, expiresAt) VALUES (?, ?, ?)", sessionID, userID, expiresAtString)
+    } catch {
+        // log error
+    }
+    return sessionID
+}
+
+func getUserFromSession(_ sessionID: String?) -> Int? {
+    guard let sessionID = sessionID else { return nil }
+    
+    do {
+        let db = try Connection("inklings.sqlite3")
+        let stmt = try db.prepare("SELECT userID, expiresAt FROM sessions WHERE sessionID = ?")
+        for row in stmt.bind(sessionID) {
+            let expiresAtString = row[1] as! String
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+            if let expiresAt = formatter.date(from: expiresAtString), expiresAt > Date() {
+                if let id = row[0] as? Int64 {
+                    return Int(id)
+                }
+            }
+        }
+    } catch {
+        // log error
+    }
+    return nil
+}
+
+func getUserByMagicToken(_ token: String) -> Int? {
+    do {
+        let db = try Connection("inklings.sqlite3")
+        let stmt = try db.prepare("SELECT userID FROM users WHERE magicToken = ?")
+        for row in stmt.bind(token) {
+            if let id = row[0] as? Int64 {
+                return Int(id)
+            }
+        }
+    } catch {
+        // log error
+    }
+    return nil
+}
+
+func getSessionCookie(from request: HttpRequest) -> String? {
+    for header in request.headers {
+        if header.0.lowercased() == "cookie" {
+            let cookies = header.1.split(separator: ";")
+            for cookie in cookies {
+                let parts = cookie.trimmingCharacters(in: .whitespaces).split(separator: "=", maxSplits: 1)
+                if parts.count == 2 && parts[0] == "session" {
+                    return String(parts[1])
+                }
+            }
+        }
+    }
+    return nil
+}
+
+func getCurrentUser(from request: HttpRequest) -> Int? {
+    let sessionID = getSessionCookie(from: request)
+    return getUserFromSession(sessionID)
 }
 
 func getUserPreferences(forUser userID: Int) -> (color: String, font: String) {
