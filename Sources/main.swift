@@ -198,7 +198,8 @@ server["/"] = scopes {
         }
         body {
           makeHeader();
-          showNotebook(notebook_id, toUser: 1);
+          let userID = getCurrentUser(from: request) ?? 0
+          showNotebook(notebook_id, toUser: userID);
         }
       }
      }(request)
@@ -241,7 +242,8 @@ server["/"] = scopes {
         }
         body {
           makeHeader();
-          showPage(page_id, inNotebook: notebook_id, toUser: 1);
+          let userID = getCurrentUser(from: request) ?? 0
+          showPage(page_id, inNotebook: notebook_id, toUser: userID);
         }
       }
      }(request)
