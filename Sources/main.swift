@@ -410,7 +410,7 @@ server.POST["/account/reset-token"] = { request in
     }
     
     // Generate new magic token
-    let newToken = UUID().uuidString
+    let newToken = generateWhimsicalToken()
     
     // Update user's magic token and delete all their sessions
     do {
@@ -1876,6 +1876,31 @@ func getUserFromSession(_ sessionID: String?) -> Int? {
         // log error
     }
     return nil
+}
+
+func generateWhimsicalToken() -> String {
+    // Load words from file
+    var words: [String] = []
+    if let contents = try? String(contentsOfFile: "words.txt", encoding: .utf8) {
+        words = contents.components(separatedBy: .newlines).filter { !$0.isEmpty }
+    }
+    
+    // Fallback if file is empty or missing
+    if words.count < 4 {
+        return UUID().uuidString
+    }
+    
+    // Pick 4 random words
+    var selectedWords: [String] = []
+    for _ in 0..<4 {
+        let index = Int.random(in: 0..<words.count)
+        selectedWords.append(words[index])
+    }
+    
+    // Append 3-digit number
+    let number = Int.random(in: 100...999)
+    
+    return selectedWords.joined(separator: "-") + "-\(number)"
 }
 
 func getUserByMagicToken(_ token: String) -> Int? {
