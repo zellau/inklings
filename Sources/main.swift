@@ -240,6 +240,23 @@ server["/"] = scopes {
     return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(notebook_id)/\(page_id)"], nil)
   }
 
+server.POST["/notebook/:notebook/page/create"] = { request in
+    guard let notebook_id = Int("\(request.params[":notebook"]!)") else {
+      //TODO: deal with this
+      return HttpResponse.ok(.text("\(request.params[":notebook"])"))
+    }
+    var formData = [String: String]();
+    for (key,value) in request.parseUrlencodedForm() {
+      formData[key] = value;
+    }
+    let title = formData["title"]!;
+    let textBody = formData["body"]!;
+
+    let page_id = savePage(nil, inNotebook: notebook_id, title: title, textBody: textBody);
+
+    return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(notebook_id)/\(page_id)"], nil)
+  }
+
 server.POST["/search"] = { request in
     var formData = [String: String]()
     for (key, value) in request.parseUrlencodedForm() {
@@ -830,7 +847,7 @@ func editPage(_ pageID: Int?, inNotebook notebookID: Int) {
   }
 }
 
-func savePage(_ pageID: Int, inNotebook notebookID: Int, title: String, textBody: String) {
+func savePage(_ pageID: Int?, inNotebook notebookID: Int, title: String, textBody: String) -> Int {
   do {
     //TODO: check that the user is allowed to do this
     let pages = Table("pages");
@@ -839,10 +856,22 @@ func savePage(_ pageID: Int, inNotebook notebookID: Int, title: String, textBody
     let bodyExpression = Expression<String>("body")
 
     let db = try Connection("inklings.sqlite3");
-    let page = pages.filter(id == pageID);
-    try db.run(page.update(titleExpression <- title, bodyExpression <- textBody));
-   } catch {
-    //log this probably
+    
+    if let pageID = pageID { // update existing page
+      let page = pages.filter(id == pageID)
+      try db.run(page.update(titleExpression <- title, bodyExpression <- textBody));
+      return pageID
+    } else { //create new page
+      let maxIDQuery = "SELECT COALESCE(MAX(pageID), 0) + 1 FROM pages"
+      let newID = try db.scalar(maxIDQuery) as! Int64
+      let insertPage = "INSERT INTO pages (pageID, storyID, title, body) VALUES (?, ?, ?, ?)"
+      try db.run(insertPage, Int64(newID), notebookID, title, textBody)
+      return Int(newID)
+    }
+  } catch {
+    print("Error saving page: \(error)")
+    return 0
+
   }
 }
 
