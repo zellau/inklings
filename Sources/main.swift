@@ -170,6 +170,26 @@ server["/"] = scopes {
        //TODO: deal with this
        return HttpResponse.ok(.text("\(request.params[":notebook"])"))
      }
+
+     let pageParam = request.params[":page"] ?? ""
+     
+     // Handle /notebook/:notebook/new specially
+     if pageParam == "new" {
+      let userPrefs = getUserPreferences(forUser: 1)
+
+      return scopes {
+        html {
+          head {
+            addStylesheet();
+          }
+          body {
+            makeHeader();
+            editPage(nil, inNotebook: notebook_id);
+          }
+      }
+     }(request)
+     }
+
      guard let page_id = Int("\(request.params[":page"]!)") else {
        //TODO: deal with this
        return HttpResponse.ok(.text("\(request.params[":page"])"))
@@ -229,25 +249,6 @@ server["/"] = scopes {
 
     return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(notebook_id)/\(page_id)"], nil)
   }
-
-   // Create new notebook page
-   server["/notebook/:notebook/new"] = { request in
-     guard let notebook_id = Int("\(request.params[":notebook"]!)") else {
-       //TODO: deal with this
-       return HttpResponse.ok(.text("\(request.params[":notebook"])"))
-     }
-     return scopes {
-      html {
-        head {
-          addStylesheet();
-        }
-        body {
-          makeHeader();
-          editPage();
-        }
-      }
-     }(request)
-   }
 
 server.POST["/search"] = { request in
     var formData = [String: String]()
@@ -773,31 +774,44 @@ func showPage(_ pageID: Int, inNotebook notebookID: Int, toUser user: Int) {
   }
 }
 
-func editPage(_ pageID: Int, inNotebook notebookID: Int) {
+func editPage(_ pageID: Int?, inNotebook notebookID: Int) {
   do {
     let pages = Table("pages");
     let id = Expression<Int>("pageID")
-    let title = Expression<String>("title")
-    let body = Expression<String>("body")
+    let titleCol = Expression<String>("title")
+    let bodyCol = Expression<String>("body")
 
     let db = try Connection("inklings.sqlite3");
-    let query = pages.where(id == pageID)
-    let page = try db.pluck(query)!
+    
+    var currentTitle = ""
+    var currentBody = ""
+    var formAction = "/notebook/\(notebookID)/page/create"
+    
+    if let existingID = pageID {
+      // Editing existing page - load its content
+      let query = pages.where(id == existingID)
+      if let page = try db.pluck(query) {
+        currentTitle = page[titleCol]
+        currentBody = page[bodyCol]
+        formAction = "/notebook/\(notebookID)/\(existingID)/save"
+      }
+    }
+    // If pageID is nil, we're creating a new page - leave title/body empty
 
     form {
-      action = "save"
+      action = formAction
       method = "POST"
       input {
         name = "title"
         type = "text"
         idd = "title"
-        value = page[title]
+        value = currentTitle
       }
       br {}
       textarea {
         name = "body"
         idd = "body"
-        inner = page[body]
+        inner = currentBody
       }
       br {}
       input {
@@ -1049,29 +1063,6 @@ func getComments(forPage pageID: Int) -> [(id: Int, userName: String, commentTex
     // log error
   }
   return comments
-}
-
-func editPage() {
-  //do {
-    // let pages = Table("pages");
-    // let id = Expression<Int>("pageID")
-    // let title = Expression<String>("title")
-    // let body = Expression<String>("body")
-
-    // let db = try Connection("inklings.sqlite3");
-    // let query = pages.where(id == pageID)
-    // let page = try db.pluck(query)!
-
-    // h2 {
-    //   inner = page[title]
-    // }
-    // p {
-    //   classs = "notebook"
-    //   inner = page[body]
-    //}
-   //} catch {
-    //log this probably
-  //}
 }
 
 func showSearchResults(query: String, forUser user: Int) {
