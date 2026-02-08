@@ -73,6 +73,14 @@ h2,p {
 	margin:0;
 }
 
+p.notebook {
+  text-indent: 5%;
+}
+
+span {
+  text-indent: 0%;
+}
+
 nav form {
   margin: 0;
   display: inline;

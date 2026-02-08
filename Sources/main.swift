@@ -527,10 +527,9 @@ func showPage(_ pageID: Int, inNotebook notebookID: Int, toUser user: Int) {
                 inner = "Edit"
               }
             }
-            p {
-              classs = "notebook"
+            div {
               idd = "pageBody"
-              inner = renderBodyWithInlineComments(body: page[body], comments: comments)
+              inner = renderBodyWithInlineComments(page[body], comments: comments)
             }
           }
           div {
@@ -1563,7 +1562,17 @@ func getCustomFontByID(_ fontID: Int) -> (fontName: String, fileName: String)? {
     return nil
 }
 
-func renderBodyWithInlineComments(body: String, comments: [(id: Int, userName: String, commentText: String, selectedText: String?, startOffset: Int?, endOffset: Int?, fontColor: String, fontName: String)]) -> String {
+func formatBodyInHTML(_ body: String) -> String {
+  let paragraphs = body.components(separatedBy: "\n")
+  let formattedParagraphs = paragraphs.map { p in
+    return "<p class='notebook'>\(p)</p>"
+  }
+  return formattedParagraphs.joined()
+}
+
+func renderBodyWithInlineComments(_ bodyUnformatted: String, comments: [(id: Int, userName: String, commentText: String, selectedText: String?, startOffset: Int?, endOffset: Int?, fontColor: String, fontName: String)]) -> String {
+  let body = formatBodyInHTML(bodyUnformatted)
+
     // Filter to only comments with selected text
     let inlineComments = comments.filter { $0.selectedText != nil && !$0.selectedText!.isEmpty }
     
