@@ -536,15 +536,22 @@ func showPage(_ pageID: String, inNotebook notebookID: String, toUser user: Int)
 
     let db = try Connection("inklings.sqlite3");
     let roleQuery = user_storiesTable.where(userID == user && notebookIDExpression == notebookID)
-    var userRole = 0;
-    if let userStory = try db.pluck(roleQuery){
-      userRole = userStory[role];
+    var userRole: Int? = nil
+    if let userStory = try db.pluck(roleQuery) {
+      userRole = userStory[role]
+    } else if user != 0 {
+      // Logged-in users without a specific role get level 5 (whole_website)
+      userRole = 5
     }
 
     let query = pages.where(idExpression == pageID && notebookIDExpression == notebookID)
     let page = try db.pluck(query)!
+    let pagePublished = page[publishedExpression]
 
-    if (userRole != 0) { //TODO: add more granularity to these roles
+    // Check access: fully_public (6) is visible to everyone, otherwise user's role must be <= published level
+    let canView = pagePublished == Published.fully_public.rawValue || (userRole != nil && userRole! <= pagePublished)
+
+    if canView {
       // Fetch comments and generate custom font CSS
       let comments = getComments(forPage: pageID, inNotebook: notebookID)
       var customFontCSS = ""
@@ -583,7 +590,7 @@ func showPage(_ pageID: String, inNotebook notebookID: String, toUser user: Int)
             h2 {
               inner = page[title]
             }
-            if (userRole == Roles.writer.rawValue) {
+            if (userRole == Roles.writer.rawValue) { // Author view
               let publishedLabels = ["Authors only", "Editors", "Beta readers", "Subscribed readers", "All inklings", "Anyone"]
               let publishedValue = page[publishedExpression]
               let visibilityLabel = publishedLabels[publishedValue - 1]
