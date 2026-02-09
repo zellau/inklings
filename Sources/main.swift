@@ -1113,7 +1113,7 @@ func showNotebooks(forUser user: Int) {
   }
 }
 
-func showNotebook(_ notebookID: String, toUser user: Int) { //TODO: add user specific logic
+func showNotebook(_ notebookID: String, toUser user: Int) {
   do {
     let user_storiesTable = Table("user_stories");
     let storiesTable = Table("stories");
@@ -1123,15 +1123,19 @@ func showNotebook(_ notebookID: String, toUser user: Int) { //TODO: add user spe
     let notebookIDExpression = Expression<String>("notebookID")
     let title = Expression<String>("title")
     let description = Expression<String>("description")
+    let publishedExpression = Expression<Int>("published")
 
     let userID = Expression<Int>("userID")
     let role = Expression<Int>("role")
 
     let db = try Connection("inklings.sqlite3");
     let roleQuery = user_storiesTable.where(userID == user && notebookIDExpression == notebookID)
-    var userRole = 0;
-    if let userStory = try db.pluck(roleQuery){
-      userRole = userStory[role];
+    var userRole: Int? = nil
+    if let userStory = try db.pluck(roleQuery) {
+      userRole = userStory[role]
+    } else if user != 0 {
+      // Logged-in users without a specific role get level 5 (whole_website)
+      userRole = 5
     }
     let query = storiesTable.where(idExpression == notebookID)
     guard let story = try db.pluck(query) else {
@@ -1141,21 +1145,32 @@ func showNotebook(_ notebookID: String, toUser user: Int) { //TODO: add user spe
       return;
     }
     
-    h2 {
-      inner = story[title];
+    // Get all pages and filter by permission
+    let allPages = pagesTable.where(notebookIDExpression == notebookID)
+    var visiblePages: [(id: String, title: String)] = []
+    for page in try db.prepare(allPages) {
+      let pagePublished = page[publishedExpression]
+      // Page is visible if fully_public OR user's role <= published level
+      let canView = pagePublished == Published.fully_public.rawValue || (userRole != nil && userRole! <= pagePublished)
+      if canView {
+        visiblePages.append((id: page[idExpression], title: page[title]))
+      }
     }
-    p {
-      inner = story[description];
-    }
-    if (userRole != 0) {
-      let pages = pagesTable.where(notebookIDExpression == notebookID);
-      for page in try db.prepare(pages) {
-        let pageID = page[idExpression]
+
+    // Show notebook if user has any visible pages
+    if !visiblePages.isEmpty || userRole == Roles.writer.rawValue {
+      h2 {
+        inner = story[title];
+      }
+      p {
+        inner = story[description];
+      }
+      for page in visiblePages {
         a {
           classs = "blocklink"
-          href = "/notebook/\(notebookID)/\(pageID)"
+          href = "/notebook/\(notebookID)/\(page.id)"
           h3 {
-            inner = page[title]
+            inner = page.title
           }
         }
       }
@@ -1169,13 +1184,18 @@ func showNotebook(_ notebookID: String, toUser user: Int) { //TODO: add user spe
         }
       }
     } else {
+      h2 {
+        inner = story[title];
+      }
+      p {
+        inner = story[description];
+      }
       h3 {
         inner = "You do not have permission to view this story. Request?"
       }
       a {
         inner = "Request permission"
       }
-      //TODO: make this work better with public stories
     }
    } catch {
     //log this probably
