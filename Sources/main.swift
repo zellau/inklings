@@ -1288,6 +1288,7 @@ func showSearchResults(query: String, forUser user: Int) {
     let notebookIDExpression = Expression<String>("notebookID")
     let pageTitle = Expression<String>("title")
     let pageBody = Expression<String>("body")
+    let publishedExpression = Expression<Int>("published")
     
     let storyTitle = Expression<String>("title")
     let storyDescription = Expression<String>("description")
@@ -1298,64 +1299,140 @@ func showSearchResults(query: String, forUser user: Int) {
     
     let db = try Connection("inklings.sqlite3")
     
-    // Get all notebook ids the user has access to
+    // Build a map of notebook -> user role
+    var notebookRoles: [String: Int] = [:]
     let accessibleStories = user_storiesTable.where(userID == user)
-    var notebookIDs: [String] = []
     for story in try db.prepare(accessibleStories) {
-      notebookIDs.append(story[notebookIDExpression])
+      notebookRoles[story[notebookIDExpression]] = story[role]
     }
     
-    if notebookIDs.isEmpty {
-      p {
-        inner = "You don't have access to any notebooks."
+    // Helper to get user's effective role for a notebook
+    func getUserRole(forNotebook notebookID: String) -> Int? {
+      if let explicitRole = notebookRoles[notebookID] {
+        return explicitRole
+      } else if user != 0 {
+        return 5 // Logged-in users get level 5 by default
       }
-      return
+      return nil
+    }
+    
+    // Helper to check if user can view a page
+    func canViewPage(published: Int, notebookID: String) -> Bool {
+      if published == Published.fully_public.rawValue {
+        return true
+      }
+      guard let userRole = getUserRole(forNotebook: notebookID) else {
+        return false
+      }
+      return userRole <= published
     }
     
     let searchPattern = "%\(query)%"
     var storyResultCount = 0
     var pageResultCount = 0
     
-    // Search stories (notebooks) first
+    // Track notebooks that match directly via title/description
+    var matchingNotebookIDs = Set<String>()
+    
+    // Track notebooks that have matching pages the user can't see
+    var notebooksWithHiddenMatches = Set<String>()
+    
+    // First pass: find pages that match and determine which user can see
+    let pagesQuery = pagesTable.where(
+      pageTitle.like(searchPattern) || pageBody.like(searchPattern)
+    )
+    
+    for page in try db.prepare(pagesQuery) {
+      let notebookID = page[notebookIDExpression]
+      let pagePublished = page[publishedExpression]
+      
+      if !canViewPage(published: pagePublished, notebookID: notebookID) {
+        // User can't see this page, but notebook should show up
+        notebooksWithHiddenMatches.insert(notebookID)
+      }
+    }
+    
+    // Search stories (notebooks) - show all matching notebooks
     h3 {
       inner = "Notebooks"
     }
     
-    for notebookID in notebookIDs {
-      let storyQuery = storiesTable.where(
-        idExpression == notebookID &&
-        (storyTitle.like(searchPattern) || storyDescription.like(searchPattern))
-      )
+    // First show notebooks that match title/description
+    let storyQuery = storiesTable.where(
+      storyTitle.like(searchPattern) || storyDescription.like(searchPattern)
+    )
+    
+    for story in try db.prepare(storyQuery) {
+      let notebookID = story[idExpression]
+      matchingNotebookIDs.insert(notebookID)
       
-      for story in try db.prepare(storyQuery) {
-        storyResultCount += 1
-        
-        // Find the writer(s) for this story
-        let writerQuery = user_storiesTable.where(notebookIDExpression == notebookID && role == Roles.writer.rawValue)
-        var writerNames: [String] = []
-        for writer in try db.prepare(writerQuery) {
-          let writerUserQuery = usersTable.where(userID == writer[userID])
-          if let writerUser = try db.pluck(writerUserQuery) {
-            writerNames.append(writerUser[userName])
-          }
+      storyResultCount += 1
+      
+      // Find the writer(s) for this story
+      let writerQuery = user_storiesTable.where(notebookIDExpression == notebookID && role == Roles.writer.rawValue)
+      var writerNames: [String] = []
+      for writer in try db.prepare(writerQuery) {
+        let writerUserQuery = usersTable.where(userID == writer[userID])
+        if let writerUser = try db.pluck(writerUserQuery) {
+          writerNames.append(writerUser[userName])
         }
-        let writerString = writerNames.isEmpty ? "Unknown" : writerNames.joined(separator: ", ")
-        
-        a {
-          classs = "blocklink"
-          href = "/notebook/\(notebookID)"
-          h2 {
-            inner = story[storyTitle]
-          }
-          p {
-            classs = "writer-name"
-            inner = "by \(writerString)"
-          }
-          let descText = story[storyDescription]
-          let snippet = String(descText.prefix(200))
-          p {
-            inner = snippet + (descText.count > 200 ? "..." : "")
-          }
+      }
+      let writerString = writerNames.isEmpty ? "Unknown" : writerNames.joined(separator: ", ")
+      
+      a {
+        classs = "blocklink"
+        href = "/notebook/\(notebookID)"
+        h2 {
+          inner = story[storyTitle]
+        }
+        p {
+          classs = "writer-name"
+          inner = "by \(writerString)"
+        }
+        let descText = story[storyDescription]
+        let snippet = String(descText.prefix(200))
+        p {
+          inner = snippet + (descText.count > 200 ? "..." : "")
+        }
+      }
+    }
+    
+    // Also show notebooks that have hidden page matches (not already shown)
+    for notebookID in notebooksWithHiddenMatches {
+      if matchingNotebookIDs.contains(notebookID) {
+        continue // Already shown
+      }
+      
+      let storyQuery = storiesTable.where(idExpression == notebookID)
+      guard let story = try db.pluck(storyQuery) else { continue }
+      
+      storyResultCount += 1
+      
+      // Find the writer(s) for this story
+      let writerQuery = user_storiesTable.where(notebookIDExpression == notebookID && role == Roles.writer.rawValue)
+      var writerNames: [String] = []
+      for writer in try db.prepare(writerQuery) {
+        let writerUserQuery = usersTable.where(userID == writer[userID])
+        if let writerUser = try db.pluck(writerUserQuery) {
+          writerNames.append(writerUser[userName])
+        }
+      }
+      let writerString = writerNames.isEmpty ? "Unknown" : writerNames.joined(separator: ", ")
+      
+      a {
+        classs = "blocklink"
+        href = "/notebook/\(notebookID)"
+        h2 {
+          inner = story[storyTitle]
+        }
+        p {
+          classs = "writer-name"
+          inner = "by \(writerString)"
+        }
+        let descText = story[storyDescription]
+        let snippet = String(descText.prefix(200))
+        p {
+          inner = snippet + (descText.count > 200 ? "..." : "")
         }
       }
     }
@@ -1366,12 +1443,20 @@ func showSearchResults(query: String, forUser user: Int) {
       }
     }
     
-    // Search pages
+    // Search pages - filter by permission
     h3 {
       inner = "Pages"
     }
     
-    for notebookID in notebookIDs {
+    for page in try db.prepare(pagesQuery) {
+      let notebookID = page[notebookIDExpression]
+      let pagePublished = page[publishedExpression]
+      
+      // Check permission
+      if !canViewPage(published: pagePublished, notebookID: notebookID) {
+        continue
+      }
+      
       // Get the story title for display
       let storyQuery = storiesTable.where(idExpression == notebookID)
       guard let story = try db.pluck(storyQuery) else { continue }
@@ -1388,31 +1473,23 @@ func showSearchResults(query: String, forUser user: Int) {
       }
       let writerString = writerNames.isEmpty ? "Unknown" : writerNames.joined(separator: ", ")
       
-      // Search pages in this story
-      let pagesQuery = pagesTable.where(
-        notebookIDExpression == notebookID && 
-        (pageTitle.like(searchPattern) || pageBody.like(searchPattern))
-      )
-      
-      for page in try db.prepare(pagesQuery) {
-        pageResultCount += 1
-        let pageID = page[idExpression]
-        a {
-          classs = "blocklink"
-          href = "/notebook/\(notebookID)/\(pageID)"
-          h2 {
-            inner = page[pageTitle]
-          }
-          p {
-            classs = "writer-name"
-            inner = "in \(notebookTitle) by \(writerString)"
-          }
-          // Show a snippet of the body
-          let bodyText = page[pageBody]
-          let snippet = String(bodyText.prefix(200))
-          p {
-            inner = snippet + (bodyText.count > 200 ? "..." : "")
-          }
+      pageResultCount += 1
+      let pageID = page[idExpression]
+      a {
+        classs = "blocklink"
+        href = "/notebook/\(notebookID)/\(pageID)"
+        h2 {
+          inner = page[pageTitle]
+        }
+        p {
+          classs = "writer-name"
+          inner = "in \(notebookTitle) by \(writerString)"
+        }
+        // Show a snippet of the body
+        let bodyText = page[pageBody]
+        let snippet = String(bodyText.prefix(200))
+        p {
+          inner = snippet + (bodyText.count > 200 ? "..." : "")
         }
       }
     }
