@@ -530,6 +530,7 @@ func showPage(_ pageID: String, inNotebook notebookID: String, toUser user: Int)
     let notebookIDExpression = Expression<String>("notebookID")
     let title = Expression<String>("title")
     let body = Expression<String>("body")
+    let publishedExpression = Expression<Int>("published")
     let userID = Expression<Int>("userID")
     let role = Expression<Int>("role")
 
@@ -583,6 +584,20 @@ func showPage(_ pageID: String, inNotebook notebookID: String, toUser user: Int)
               inner = page[title]
             }
             if (userRole == Roles.writer.rawValue) {
+              let publishedLabels = ["Authors only", "Editors", "Beta readers", "Subscribed readers", "All inklings", "Anyone"]
+              let publishedValue = page[publishedExpression]
+              let visibilityLabel = publishedLabels[publishedValue - 1]
+              p {
+                classs = "visibility-info"
+                style = "padding: 8px 0;"
+                span {
+                  inner = "This page is visible to: "
+                }
+                span {
+                  style = "font-family: \(userPrefs.font); color: \(userPrefs.color);"
+                  inner = visibilityLabel
+                }
+              }
               a {
                 href = "/notebook/\(notebookID)/\(pageID)/edit"
                 inner = "Edit"
