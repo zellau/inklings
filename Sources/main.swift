@@ -285,8 +285,9 @@ server["/"] = scopes {
     }
     let title = formData["title"]!;
     let textBody = formData["body"]!;
+    let published = Int(formData["published"] ?? "1") ?? 1;
 
-    savePage(pageID, inNotebook: notebookID, title: title, textBody: textBody);
+    savePage(pageID, inNotebook: notebookID, title: title, textBody: textBody, published: published);
 
     return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(notebookID)/\(pageID)"], nil)
   }
@@ -302,8 +303,9 @@ server.POST["/notebook/:notebook/page/create"] = { request in
     }
     let title = formData["title"]!;
     let textBody = formData["body"]!;
+    let published = Int(formData["published"] ?? "1") ?? 1;
 
-    let newPageID = createPage(inNotebook: notebookID, title: title, textBody: textBody);
+    let newPageID = createPage(inNotebook: notebookID, title: title, textBody: textBody, published: published);
 
     return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(notebookID)/\(newPageID)"], nil)
   }
@@ -852,6 +854,7 @@ func editPage(_ pageID: String?, inNotebook notebookID: String, forUser userID: 
     
     let titleExpression = Expression<String>("title")
     let bodyExpression = Expression<String>("body")
+    let publishedExpression = Expression<Int?>("published")
 
     let db = try Connection("inklings.sqlite3");
 
@@ -860,6 +863,7 @@ func editPage(_ pageID: String?, inNotebook notebookID: String, forUser userID: 
 
     var currentTitle = ""
     var currentBody = ""
+    var currentPublished = 1  // Default to "authors only"
     var formAction = "/notebook/\(notebookID)/page/create"
     
     if let existingID = pageID {
@@ -868,10 +872,20 @@ func editPage(_ pageID: String?, inNotebook notebookID: String, forUser userID: 
       if let page = try db.pluck(query) {
         currentTitle = page[titleExpression]
         currentBody = page[bodyExpression]
+        currentPublished = page[publishedExpression] ?? 1
         formAction = "/notebook/\(notebookID)/\(existingID)/save"
       }
     }
     // If pageID is nil, we're creating a new page - leave title/body empty
+
+    let publishedLabels = [
+      "Authors only",
+      "Editors",
+      "Beta readers",
+      "Subscribed readers",
+      "All inklings",
+      "Anyone"
+    ]
 
     form {
       action = formAction
@@ -885,7 +899,37 @@ func editPage(_ pageID: String?, inNotebook notebookID: String, forUser userID: 
         style = inputStyle
         value = currentTitle
       }
-      br {}
+      div {
+        classs = "publish-control"
+        style = "display: flex; align-items: center; gap: 15px; margin: 15px 0;"
+        label {
+          inner = "Visible to:"
+        }
+        input {
+          type = "range"
+          name = "published"
+          idd = "publishedSlider"
+          value = "\(currentPublished)"
+        }
+        span {
+          idd = "publishedLabel"
+          inner = publishedLabels[currentPublished - 1]
+        }
+      }
+      script {
+        inner = """
+          (function() {
+            const slider = document.getElementById('publishedSlider');
+            slider.min = 1;
+            slider.max = 6;
+            const label = document.getElementById('publishedLabel');
+            const labels = ["Authors only", "Editors", "Beta readers", "Subscribed readers", "All inklings", "Anyone"];
+            slider.addEventListener('input', function() {
+              label.textContent = labels[this.value - 1];
+            });
+          })();
+        """
+      }
       textarea {
         name = "body"
         idd = "body"
@@ -905,7 +949,7 @@ func editPage(_ pageID: String?, inNotebook notebookID: String, forUser userID: 
   }
 }
 
-func savePage(_ pageID: String, inNotebook notebookID: String, title: String, textBody: String) {
+func savePage(_ pageID: String, inNotebook notebookID: String, title: String, textBody: String, published: Int) {
   do {
     //TODO: check that the user is allowed to do this
     let pages = Table("pages");
@@ -913,22 +957,23 @@ func savePage(_ pageID: String, inNotebook notebookID: String, title: String, te
     let notebookIDExpression = Expression<String>("notebookID")
     let titleExpression = Expression<String>("title")
     let bodyExpression = Expression<String>("body")
+    let publishedExpression = Expression<Int>("published")
 
     let db = try Connection("inklings.sqlite3");
     
     let page = pages.filter(idExpression == pageID && notebookIDExpression == notebookID)
-    try db.run(page.update(titleExpression <- title, bodyExpression <- textBody));
+    try db.run(page.update(titleExpression <- title, bodyExpression <- textBody, publishedExpression <- published));
   } catch {
     print("Error saving page: \(error)")
   }
 }
 
-func createPage(inNotebook notebookID: String, title: String, textBody: String) -> String {
+func createPage(inNotebook notebookID: String, title: String, textBody: String, published: Int) -> String {
   do {
     let db = try Connection("inklings.sqlite3");
     let id = generateUniquePageID(from: title, inNotebook: notebookID)
-    let insertPage = "INSERT INTO pages (id, notebookID, title, body) VALUES (?, ?, ?, ?)"
-    try db.run(insertPage, id, notebookID, title, textBody)
+    let insertPage = "INSERT INTO pages (id, notebookID, title, body, published) VALUES (?, ?, ?, ?, ?)"
+    try db.run(insertPage, id, notebookID, title, textBody, published)
     return id
   } catch {
     print("Error creating page: \(error)")
@@ -940,7 +985,16 @@ enum Roles: Int {
   case writer = 1
   case editor
   case beta
-  case reader
+  case subscribed_reader
+}
+
+enum Published: Int {
+  case writer = 1
+  case editor
+  case beta
+  case subscribed_reader
+  case whole_website
+  case fully_public
 }
 
 func showBookshelf(forUser user: Int) {
@@ -1188,7 +1242,7 @@ func showSearchResults(query: String, forUser user: Int) {
     let user_storiesTable = Table("user_stories")
     let usersTable = Table("users")
     
-    let pageIDExpression = Expression<String>("id")
+    let idExpression = Expression<String>("id")
     let notebookIDExpression = Expression<String>("notebookID")
     let pageTitle = Expression<String>("title")
     let pageBody = Expression<String>("body")
@@ -1227,7 +1281,7 @@ func showSearchResults(query: String, forUser user: Int) {
     
     for notebookID in notebookIDs {
       let storyQuery = storiesTable.where(
-        storyIDCol == notebookID &&
+        idExpression == notebookID &&
         (storyTitle.like(searchPattern) || storyDescription.like(searchPattern))
       )
       
@@ -1277,7 +1331,7 @@ func showSearchResults(query: String, forUser user: Int) {
     
     for notebookID in notebookIDs {
       // Get the story title for display
-      let storyQuery = storiesTable.where(storyIDCol == notebookID)
+      let storyQuery = storiesTable.where(idExpression == notebookID)
       guard let story = try db.pluck(storyQuery) else { continue }
       let notebookTitle = story[storyTitle]
       
@@ -1300,7 +1354,7 @@ func showSearchResults(query: String, forUser user: Int) {
       
       for page in try db.prepare(pagesQuery) {
         pageResultCount += 1
-        let pageID = page[pageIDExpression]
+        let pageID = page[idExpression]
         a {
           classs = "blocklink"
           href = "/notebook/\(notebookID)/\(pageID)"
