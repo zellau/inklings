@@ -78,7 +78,7 @@ server["/"] = scopes {
       }
       body {
         makeHeader();
-        showPage(1);
+        showPage("lorem-ipsum", inNotebook: "tests", toUser: 0);
       }
     }
   }
@@ -187,9 +187,8 @@ server["/"] = scopes {
        }(request)
      }
      
-     guard let notebook_id = Int(notebookParam) else {
-       //TODO: deal with this
-       return HttpResponse.ok(.text("\(notebookParam)"))
+     guard notebookExists(notebookParam) else {
+       return HttpResponse.notFound()
      }
      return scopes {
       html {
@@ -199,22 +198,22 @@ server["/"] = scopes {
         body {
           makeHeader();
           let userID = getCurrentUser(from: request) ?? 0
-          showNotebook(notebook_id, toUser: userID);
+          showNotebook(notebookParam, toUser: userID);
         }
       }
      }(request)
    }
 
    server["/notebook/:notebook/:page"] = { request in
-     guard let notebook_id = Int("\(request.params[":notebook"]!)") else {
-       //TODO: deal with this
-       return HttpResponse.ok(.text("\(request.params[":notebook"])"))
+     let notebookID = request.params[":notebook"] ?? ""
+     guard notebookExists(notebookID) else {
+       return HttpResponse.notFound()
      }
 
-     let pageParam = request.params[":page"] ?? ""
+     let pageID = request.params[":page"] ?? ""
      
      // Handle /notebook/:notebook/new specially
-     if pageParam == "new" {
+     if pageID == "new" {
       let userID = getCurrentUser(from: request) ?? 0
       let userPrefs = getUserPreferences(forUser: userID)
 
@@ -225,15 +224,14 @@ server["/"] = scopes {
           }
           body {
             makeHeader();
-            editPage(nil, inNotebook: notebook_id, forUser: userID);
+            editPage(nil, inNotebook: notebookID, forUser: userID);
           }
       }
      }(request)
      }
 
-     guard let page_id = Int("\(request.params[":page"]!)") else {
-       //TODO: deal with this
-       return HttpResponse.ok(.text("\(request.params[":page"])"))
+     guard pageExists(pageID, inNotebook: notebookID) else {
+       return HttpResponse.notFound()
      }
      return scopes {
       html {
@@ -243,7 +241,7 @@ server["/"] = scopes {
         body {
           makeHeader();
           let userID = getCurrentUser(from: request) ?? 0
-          showPage(page_id, inNotebook: notebook_id, toUser: userID);
+          showPage(pageID, inNotebook: notebookID, toUser: userID);
         }
       }
      }(request)
@@ -251,13 +249,13 @@ server["/"] = scopes {
 
    server["/notebook/:notebook/:page/edit"] = { request in
      let userID = getCurrentUser(from: request) ?? 0
-     guard let notebook_id = Int("\(request.params[":notebook"]!)") else {
-       //TODO: deal with this
-       return HttpResponse.ok(.text("\(request.params[":notebook"])"))
+     let notebookID = request.params[":notebook"] ?? ""
+     guard notebookExists(notebookID) else {
+       return HttpResponse.notFound()
      }
-     guard let page_id = Int("\(request.params[":page"]!)") else {
-       //TODO: deal with this
-       return HttpResponse.ok(.text("\(request.params[":page"])"))
+     let pageID = request.params[":page"] ?? ""
+     guard pageExists(pageID, inNotebook: notebookID) else {
+       return HttpResponse.notFound()
      }
      return scopes {
       html {
@@ -266,20 +264,20 @@ server["/"] = scopes {
         }
         body {
           makeHeader();
-          editPage(page_id, inNotebook: notebook_id, forUser: userID);
+          editPage(pageID, inNotebook: notebookID, forUser: userID);
         }
       }
      }(request)
    }
 
   server.POST["/notebook/:notebook/:page/save"] = { request in
-    guard let notebook_id = Int("\(request.params[":notebook"]!)") else {
-      //TODO: deal with this
-      return HttpResponse.ok(.text("\(request.params[":notebook"])"))
+    let notebookID = request.params[":notebook"] ?? ""
+    guard notebookExists(notebookID) else {
+      return HttpResponse.notFound()
     }
-    guard let page_id = Int("\(request.params[":page"]!)") else {
-      //TODO: deal with this
-      return HttpResponse.ok(.text("\(request.params[":page"])"))
+    let pageID = request.params[":page"] ?? ""
+    guard pageExists(pageID, inNotebook: notebookID) else {
+      return HttpResponse.notFound()
     }
     var formData = [String: String]();
     for (key,value) in request.parseUrlencodedForm() {
@@ -288,15 +286,15 @@ server["/"] = scopes {
     let title = formData["title"]!;
     let textBody = formData["body"]!;
 
-    savePage(page_id, inNotebook: notebook_id, title: title, textBody: textBody);
+    savePage(pageID, inNotebook: notebookID, title: title, textBody: textBody);
 
-    return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(notebook_id)/\(page_id)"], nil)
+    return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(notebookID)/\(pageID)"], nil)
   }
 
 server.POST["/notebook/:notebook/page/create"] = { request in
-    guard let notebook_id = Int("\(request.params[":notebook"]!)") else {
-      //TODO: deal with this
-      return HttpResponse.ok(.text("\(request.params[":notebook"])"))
+    let notebookID = request.params[":notebook"] ?? ""
+    guard notebookExists(notebookID) else {
+      return HttpResponse.notFound()
     }
     var formData = [String: String]();
     for (key,value) in request.parseUrlencodedForm() {
@@ -305,9 +303,9 @@ server.POST["/notebook/:notebook/page/create"] = { request in
     let title = formData["title"]!;
     let textBody = formData["body"]!;
 
-    let page_id = savePage(nil, inNotebook: notebook_id, title: title, textBody: textBody);
+    let newPageID = createPage(inNotebook: notebookID, title: title, textBody: textBody);
 
-    return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(notebook_id)/\(page_id)"], nil)
+    return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(notebookID)/\(newPageID)"], nil)
   }
 
 server.POST["/search"] = { request in
@@ -429,10 +427,12 @@ server.POST["/account/reset-token"] = { request in
 }
 
 server.POST["/notebook/:notebook/:page/comment"] = { request in
-    guard let notebook_id = Int("\(request.params[":notebook"]!)") else {
+    let notebookID = request.params[":notebook"] ?? ""
+    guard notebookExists(notebookID) else {
       return HttpResponse.badRequest(.text("Invalid notebook"))
     }
-    guard let page_id = Int("\(request.params[":page"]!)") else {
+    let pageID = request.params[":page"] ?? ""
+    guard pageExists(pageID, inNotebook: notebookID) else {
       return HttpResponse.badRequest(.text("Invalid page"))
     }
     
@@ -448,10 +448,10 @@ server.POST["/notebook/:notebook/:page/comment"] = { request in
     
     if !commentText.isEmpty {
       let userID = getCurrentUser(from: request) ?? 0
-      saveComment(pageID: page_id, userID: userID, commentText: commentText, selectedText: selectedText, startOffset: startOffset, endOffset: endOffset)
+      saveComment(notebookID: notebookID, pageID: pageID, userID: userID, commentText: commentText, selectedText: selectedText, startOffset: startOffset, endOffset: endOffset)
     }
     
-    return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(notebook_id)/\(page_id)"], nil)
+    return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(notebookID)/\(pageID)"], nil)
   }
 
 try server.start(8081)
@@ -520,53 +520,30 @@ func makeHeader() -> () {
   }
 }
 
-func showPage(_ pageID: Int) {
-  do {
-    let pages = Table("pages");
-    let id = Expression<Int>("pageID")
-    let title = Expression<String>("title")
-    let body = Expression<String>("body")
-
-    let db = try Connection("inklings.sqlite3");
-    let query = pages.where(id == pageID)
-    let page = try db.pluck(query)!
-
-    h2 {
-      inner = page[title]
-    }
-    p {
-      classs = "notebook"
-      inner = page[body]
-    }
-   } catch {
-    //log this probably
-  }
-}
-
-func showPage(_ pageID: Int, inNotebook notebookID: Int, toUser user: Int) {
+func showPage(_ pageID: String, inNotebook notebookID: String, toUser user: Int) {
   do {
     let pages = Table("pages");
     let user_storiesTable = Table("user_stories");
-    let id = Expression<Int>("pageID")
+    let idExpression = Expression<String>("id")
+    let notebookIDExpression = Expression<String>("notebookID")
     let title = Expression<String>("title")
     let body = Expression<String>("body")
-    let storyID = Expression<Int>("storyID")
     let userID = Expression<Int>("userID")
     let role = Expression<Int>("role")
 
     let db = try Connection("inklings.sqlite3");
-    let roleQuery = user_storiesTable.where(userID == user && storyID == notebookID)
+    let roleQuery = user_storiesTable.where(userID == user && notebookIDExpression == notebookID)
     var userRole = 0;
     if let userStory = try db.pluck(roleQuery){
       userRole = userStory[role];
     }
 
-    let query = pages.where(id == pageID)
+    let query = pages.where(idExpression == pageID && notebookIDExpression == notebookID)
     let page = try db.pluck(query)!
 
     if (userRole != 0) { //TODO: add more granularity to these roles
       // Fetch comments and generate custom font CSS
-      let comments = getComments(forPage: pageID)
+      let comments = getComments(forPage: pageID, inNotebook: notebookID)
       var customFontCSS = ""
       var seenFontIDs = Set<Int>()
       for comment in comments {
@@ -867,14 +844,14 @@ func showPage(_ pageID: Int, inNotebook notebookID: Int, toUser user: Int) {
   }
 }
 
-func editPage(_ pageID: Int?, inNotebook notebookID: Int, forUser userID: Int) {
+func editPage(_ pageID: String?, inNotebook notebookID: String, forUser userID: Int) {
   do {
     let pages = Table("pages");
-    let notebooks = Table("stories");
-    let id = Expression<Int>("pageID")
+    let idExpression = Expression<String>("id")
+    let notebookIDExpression = Expression<String>("notebookID")
     
-    let titleCol = Expression<String>("title")
-    let bodyCol = Expression<String>("body")
+    let titleExpression = Expression<String>("title")
+    let bodyExpression = Expression<String>("body")
 
     let db = try Connection("inklings.sqlite3");
 
@@ -887,10 +864,10 @@ func editPage(_ pageID: Int?, inNotebook notebookID: Int, forUser userID: Int) {
     
     if let existingID = pageID {
       // Editing existing page - load its content
-      let query = pages.where(id == existingID)
+      let query = pages.where(idExpression == existingID && notebookIDExpression == notebookID)
       if let page = try db.pluck(query) {
-        currentTitle = page[titleCol]
-        currentBody = page[bodyCol]
+        currentTitle = page[titleExpression]
+        currentBody = page[bodyExpression]
         formAction = "/notebook/\(notebookID)/\(existingID)/save"
       }
     }
@@ -928,31 +905,34 @@ func editPage(_ pageID: Int?, inNotebook notebookID: Int, forUser userID: Int) {
   }
 }
 
-func savePage(_ pageID: Int?, inNotebook notebookID: Int, title: String, textBody: String) -> Int {
+func savePage(_ pageID: String, inNotebook notebookID: String, title: String, textBody: String) {
   do {
     //TODO: check that the user is allowed to do this
     let pages = Table("pages");
-    let id = Expression<Int>("pageID")
+    let idExpression = Expression<String>("id")
+    let notebookIDExpression = Expression<String>("notebookID")
     let titleExpression = Expression<String>("title")
     let bodyExpression = Expression<String>("body")
 
     let db = try Connection("inklings.sqlite3");
     
-    if let pageID = pageID { // update existing page
-      let page = pages.filter(id == pageID)
-      try db.run(page.update(titleExpression <- title, bodyExpression <- textBody));
-      return pageID
-    } else { //create new page
-      let maxIDQuery = "SELECT COALESCE(MAX(pageID), 0) + 1 FROM pages"
-      let newID = try db.scalar(maxIDQuery) as! Int64
-      let insertPage = "INSERT INTO pages (pageID, storyID, title, body) VALUES (?, ?, ?, ?)"
-      try db.run(insertPage, Int64(newID), notebookID, title, textBody)
-      return Int(newID)
-    }
+    let page = pages.filter(idExpression == pageID && notebookIDExpression == notebookID)
+    try db.run(page.update(titleExpression <- title, bodyExpression <- textBody));
   } catch {
     print("Error saving page: \(error)")
-    return 0
+  }
+}
 
+func createPage(inNotebook notebookID: String, title: String, textBody: String) -> String {
+  do {
+    let db = try Connection("inklings.sqlite3");
+    let id = generateUniquePageID(from: title, inNotebook: notebookID)
+    let insertPage = "INSERT INTO pages (id, notebookID, title, body) VALUES (?, ?, ?, ?)"
+    try db.run(insertPage, id, notebookID, title, textBody)
+    return id
+  } catch {
+    print("Error creating page: \(error)")
+    return "error"
   }
 }
 
@@ -969,7 +949,8 @@ func showBookshelf(forUser user: Int) {
     let stories = Table("stories")
     let users = Table("users")
 
-    let storyID = Expression<Int>("storyID")
+    let notebookIDExpression = Expression<String>("notebookID")
+    let idExpression = Expression<String>("id")
     let userID = Expression<Int>("userID")
     let role = Expression<Int>("role")
     let title = Expression<String>("title")
@@ -979,10 +960,11 @@ func showBookshelf(forUser user: Int) {
     let db = try Connection("inklings.sqlite3")
     let bookshelfStories = user_stories.where(userID == user && role != Roles.writer.rawValue)
     for story in try db.prepare(bookshelfStories) {
-      let notebooks = stories.where(storyID == story[storyID])
+      let notebookID = story[notebookIDExpression]
+      let notebooks = stories.where(idExpression == notebookID)
       for notebook in try db.prepare(notebooks) {
         // Find the writer(s) for this story
-        let writerQuery = user_stories.where(storyID == notebook[storyID] && role == Roles.writer.rawValue)
+        let writerQuery = user_stories.where(notebookIDExpression == notebookID && role == Roles.writer.rawValue)
         var writerNames: [String] = []
         for writer in try db.prepare(writerQuery) {
           let writerUserQuery = users.where(userID == writer[userID])
@@ -994,7 +976,7 @@ func showBookshelf(forUser user: Int) {
         
         a {
           classs = "blocklink"
-          href = "/notebook/\(notebook[storyID])"
+          href = "/notebook/\(notebookID)"
           h2 {
             inner = notebook[title]
           }
@@ -1018,7 +1000,8 @@ func showNotebooks(forUser user: Int) {
     let user_stories = Table("user_stories");
     let stories = Table("stories");
 
-    let storyID = Expression<Int>("storyID")
+    let notebookIDExpression = Expression<String>("notebookID")
+    let idExpression = Expression<String>("id")
     let userID = Expression<Int>("userID")
     let role = Expression<Int>("role")
     let title = Expression<String>("title")
@@ -1027,11 +1010,12 @@ func showNotebooks(forUser user: Int) {
     let db = try Connection("inklings.sqlite3");
     let notebookStories = user_stories.where(userID == user && role == Roles.writer.rawValue)
     for story in try db.prepare(notebookStories) {
-      let notebooks = stories.where(storyID == story[storyID])
+      let notebookID = story[notebookIDExpression]
+      let notebooks = stories.where(idExpression == notebookID)
       for notebook in try db.prepare(notebooks) {
         a {
           classs = "blocklink"
-          href = "/notebook/\(notebook[storyID])"
+          href = "/notebook/\(notebookID)"
           h2 {
             inner = notebook[title]
           }
@@ -1053,33 +1037,34 @@ func showNotebooks(forUser user: Int) {
   }
 }
 
-func showNotebook(_ notebookID: Int, toUser user: Int) { //TODO: add user specific logic
+func showNotebook(_ notebookID: String, toUser user: Int) { //TODO: add user specific logic
   do {
     let user_storiesTable = Table("user_stories");
     let storiesTable = Table("stories");
     let pagesTable = Table("pages");
 
-    let storyID = Expression<Int>("storyID")
+    let idExpression = Expression<String>("id")
+    let notebookIDExpression = Expression<String>("notebookID")
     let title = Expression<String>("title")
     let description = Expression<String>("description")
-    let pageID = Expression<Int>("pageID")
 
     let userID = Expression<Int>("userID")
     let role = Expression<Int>("role")
 
     let db = try Connection("inklings.sqlite3");
-    let roleQuery = user_storiesTable.where(userID == user && storyID == notebookID)
+    let roleQuery = user_storiesTable.where(userID == user && notebookIDExpression == notebookID)
     var userRole = 0;
     if let userStory = try db.pluck(roleQuery){
       userRole = userStory[role];
     }
-    let query = storiesTable.where(storyID == notebookID)
+    let query = storiesTable.where(idExpression == notebookID)
     guard let story = try db.pluck(query) else {
       h1 {
         inner = "This story does not exist."
       }
       return;
     }
+    
     h2 {
       inner = story[title];
     }
@@ -1087,11 +1072,12 @@ func showNotebook(_ notebookID: Int, toUser user: Int) { //TODO: add user specif
       inner = story[description];
     }
     if (userRole != 0) {
-      let pages = pagesTable.where(storyID == notebookID);
+      let pages = pagesTable.where(notebookIDExpression == notebookID);
       for page in try db.prepare(pages) {
+        let pageID = page[idExpression]
         a {
           classs = "blocklink"
-          href = "/notebook/\(notebookID)/\(page[pageID])"
+          href = "/notebook/\(notebookID)/\(pageID)"
           h3 {
             inner = page[title]
           }
@@ -1120,50 +1106,49 @@ func showNotebook(_ notebookID: Int, toUser user: Int) { //TODO: add user specif
   }
 }
 
-func createNotebook(title: String, description: String, userID: Int) -> Int {
+func createNotebook(title: String, description: String, userID: Int) -> String {
     do {
         let db = try Connection("inklings.sqlite3")
         
-        // Get the next storyID
-        let maxIDQuery = "SELECT COALESCE(MAX(storyID), 0) + 1 FROM stories"
-        let newID = try db.scalar(maxIDQuery) as! Int64
+        // Generate unique id
+        let id = generateUniqueNotebookID(from: title)
         
         // Insert the new story/notebook
-        let insertStory = "INSERT INTO stories (storyID, title, description) VALUES (?, ?, ?)"
-        try db.run(insertStory, Int64(newID), title, description)
+        let insertStory = "INSERT INTO stories (id, title, description) VALUES (?, ?, ?)"
+        try db.run(insertStory, id, title, description)
         
         // Create user_stories entry with writer role (1)
-        let insertUserStory = "INSERT INTO user_stories (userID, storyID, role) VALUES (?, ?, ?)"
-        try db.run(insertUserStory, Int64(userID), Int64(newID), Int64(Roles.writer.rawValue))
+        let insertUserStory = "INSERT INTO user_stories (userID, notebookID, role) VALUES (?, ?, ?)"
+        try db.run(insertUserStory, Int64(userID), id, Int64(Roles.writer.rawValue))
         
-        return Int(newID)
+        return id
     } catch {
         print("Error creating notebook: \(error)")
-        return 0
+        return "error"
     }
 }
 
-func saveComment(pageID: Int, userID: Int, commentText: String, selectedText: String?, startOffset: Int?, endOffset: Int?) {
+func saveComment(notebookID: String, pageID: String, userID: Int, commentText: String, selectedText: String?, startOffset: Int?, endOffset: Int?) {
   do {
     let db = try Connection("inklings.sqlite3")
     
     if let selText = selectedText, let start = startOffset, let end = endOffset {
-      try db.run("INSERT INTO comments (pageID, userID, commentText, selectedText, startOffset, endOffset) VALUES (?, ?, ?, ?, ?, ?)",
-        pageID, userID, commentText, selText, start, end)
+      try db.run("INSERT INTO comments (notebookID, pageID, userID, commentText, selectedText, startOffset, endOffset) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        notebookID, pageID, userID, commentText, selText, start, end)
     } else {
-      try db.run("INSERT INTO comments (pageID, userID, commentText) VALUES (?, ?, ?)",
-        pageID, userID, commentText)
+      try db.run("INSERT INTO comments (notebookID, pageID, userID, commentText) VALUES (?, ?, ?, ?)",
+        notebookID, pageID, userID, commentText)
     }
   } catch {
     // log error
   }
 }
 
-func getComments(forPage pageID: Int) -> [(id: Int, userName: String, commentText: String, selectedText: String?, startOffset: Int?, endOffset: Int?, fontColor: String, fontName: String)] {
+func getComments(forPage pageID: String, inNotebook notebookID: String) -> [(id: Int, userName: String, commentText: String, selectedText: String?, startOffset: Int?, endOffset: Int?, fontColor: String, fontName: String)] {
   var comments: [(id: Int, userName: String, commentText: String, selectedText: String?, startOffset: Int?, endOffset: Int?, fontColor: String, fontName: String)] = []
   do {
     let db = try Connection("inklings.sqlite3")
-    let stmt = try db.prepare("SELECT c.commentID, u.name, c.commentText, c.selectedText, c.startOffset, c.endOffset, u.preferredColor, u.preferredFont FROM comments c JOIN users u ON c.userID = u.userID WHERE c.pageID = ? ORDER BY c.createdAt DESC", pageID)
+    let stmt = try db.prepare("SELECT c.commentID, u.name, c.commentText, c.selectedText, c.startOffset, c.endOffset, u.preferredColor, u.preferredFont FROM comments c JOIN users u ON c.userID = u.userID WHERE c.notebookID = ? AND c.pageID = ? ORDER BY c.createdAt DESC", notebookID, pageID)
     for row in stmt {
       let id = row[0] as! Int64
       let userName = row[1] as! String
@@ -1203,30 +1188,28 @@ func showSearchResults(query: String, forUser user: Int) {
     let user_storiesTable = Table("user_stories")
     let usersTable = Table("users")
     
-    let pageID = Expression<Int>("pageID")
+    let pageIDExpression = Expression<String>("id")
+    let notebookIDExpression = Expression<String>("notebookID")
     let pageTitle = Expression<String>("title")
     let pageBody = Expression<String>("body")
-    let pageStoryID = Expression<Int>("storyID")
     
-    let storyID = Expression<Int>("storyID")
     let storyTitle = Expression<String>("title")
     let storyDescription = Expression<String>("description")
     
     let userID = Expression<Int>("userID")
-    let usStoryID = Expression<Int>("storyID")
     let role = Expression<Int>("role")
     let userName = Expression<String>("name")
     
     let db = try Connection("inklings.sqlite3")
     
-    // Get all story IDs the user has access to
+    // Get all notebook ids the user has access to
     let accessibleStories = user_storiesTable.where(userID == user)
-    var storyIDs: [Int] = []
+    var notebookIDs: [String] = []
     for story in try db.prepare(accessibleStories) {
-      storyIDs.append(story[usStoryID])
+      notebookIDs.append(story[notebookIDExpression])
     }
     
-    if storyIDs.isEmpty {
+    if notebookIDs.isEmpty {
       p {
         inner = "You don't have access to any notebooks."
       }
@@ -1242,9 +1225,9 @@ func showSearchResults(query: String, forUser user: Int) {
       inner = "Notebooks"
     }
     
-    for sid in storyIDs {
+    for notebookID in notebookIDs {
       let storyQuery = storiesTable.where(
-        storyID == sid &&
+        storyIDCol == notebookID &&
         (storyTitle.like(searchPattern) || storyDescription.like(searchPattern))
       )
       
@@ -1252,7 +1235,7 @@ func showSearchResults(query: String, forUser user: Int) {
         storyResultCount += 1
         
         // Find the writer(s) for this story
-        let writerQuery = user_storiesTable.where(storyID == sid && role == Roles.writer.rawValue)
+        let writerQuery = user_storiesTable.where(notebookIDExpression == notebookID && role == Roles.writer.rawValue)
         var writerNames: [String] = []
         for writer in try db.prepare(writerQuery) {
           let writerUserQuery = usersTable.where(userID == writer[userID])
@@ -1264,7 +1247,7 @@ func showSearchResults(query: String, forUser user: Int) {
         
         a {
           classs = "blocklink"
-          href = "/notebook/\(sid)"
+          href = "/notebook/\(notebookID)"
           h2 {
             inner = story[storyTitle]
           }
@@ -1292,14 +1275,14 @@ func showSearchResults(query: String, forUser user: Int) {
       inner = "Pages"
     }
     
-    for sid in storyIDs {
+    for notebookID in notebookIDs {
       // Get the story title for display
-      let storyQuery = storiesTable.where(storyID == sid)
+      let storyQuery = storiesTable.where(storyIDCol == notebookID)
       guard let story = try db.pluck(storyQuery) else { continue }
       let notebookTitle = story[storyTitle]
       
       // Find the writer(s) for this story
-      let writerQuery = user_storiesTable.where(storyID == sid && role == Roles.writer.rawValue)
+      let writerQuery = user_storiesTable.where(notebookIDExpression == notebookID && role == Roles.writer.rawValue)
       var writerNames: [String] = []
       for writer in try db.prepare(writerQuery) {
         let writerUserQuery = usersTable.where(userID == writer[userID])
@@ -1311,15 +1294,16 @@ func showSearchResults(query: String, forUser user: Int) {
       
       // Search pages in this story
       let pagesQuery = pagesTable.where(
-        pageStoryID == sid && 
+        notebookIDExpression == notebookID && 
         (pageTitle.like(searchPattern) || pageBody.like(searchPattern))
       )
       
       for page in try db.prepare(pagesQuery) {
         pageResultCount += 1
+        let pageID = page[pageIDExpression]
         a {
           classs = "blocklink"
-          href = "/notebook/\(sid)/\(page[pageID])"
+          href = "/notebook/\(notebookID)/\(pageID)"
           h2 {
             inner = page[pageTitle]
           }
@@ -1876,6 +1860,111 @@ func getUserFromSession(_ sessionID: String?) -> Int? {
         // log error
     }
     return nil
+}
+
+func generateID(from title: String) -> String {
+    // Convert to lowercase and replace spaces/special chars with dashes
+    let allowed = CharacterSet.alphanumerics
+    var id = title.lowercased()
+        .components(separatedBy: allowed.inverted)
+        .filter { !$0.isEmpty }
+        .joined(separator: "-")
+    
+    if id.isEmpty {
+        id = "untitled"
+    }
+    
+    return id
+}
+
+func generateUniqueNotebookID(from title: String) -> String {
+    let baseID = generateID(from: title)
+    
+    do {
+        let db = try Connection("inklings.sqlite3")
+        
+        // Check if base id exists
+        let stmt = try db.prepare("SELECT COUNT(*) FROM stories WHERE id = ?")
+        for row in stmt.bind(baseID) {
+            if let count = row[0] as? Int64, count == 0 {
+                return baseID
+            }
+        }
+        
+        // Add random numbers until unique
+        for _ in 0..<100 {
+            let number = Int.random(in: 100...999)
+            let newID = "\(baseID)-\(number)"
+            let checkStmt = try db.prepare("SELECT COUNT(*) FROM stories WHERE id = ?")
+            for row in checkStmt.bind(newID) {
+                if let count = row[0] as? Int64, count == 0 {
+                    return newID
+                }
+            }
+        }
+    } catch {
+        // Fall through to random
+    }
+    
+    return "\(baseID)-\(Int.random(in: 1000...9999))"
+}
+
+func generateUniquePageID(from title: String, inNotebook notebookID: String) -> String {
+    let baseID = generateID(from: title)
+    
+    do {
+        let db = try Connection("inklings.sqlite3")
+        
+        // Check if base id exists in this notebook
+        let stmt = try db.prepare("SELECT COUNT(*) FROM pages WHERE id = ? AND notebookID = ?")
+        for row in stmt.bind(baseID, notebookID) {
+            if let count = row[0] as? Int64, count == 0 {
+                return baseID
+            }
+        }
+        
+        // Add random numbers until unique
+        for _ in 0..<100 {
+            let number = Int.random(in: 100...999)
+            let newID = "\(baseID)-\(number)"
+            let checkStmt = try db.prepare("SELECT COUNT(*) FROM pages WHERE id = ? AND notebookID = ?")
+            for row in checkStmt.bind(newID, notebookID) {
+                if let count = row[0] as? Int64, count == 0 {
+                    return newID
+                }
+            }
+        }
+    } catch {
+        // Fall through to random
+    }
+    
+    return "\(baseID)-\(Int.random(in: 1000...9999))"
+}
+
+func notebookExists(_ id: String) -> Bool {
+    do {
+        let db = try Connection("inklings.sqlite3")
+        let stmt = try db.prepare("SELECT COUNT(*) FROM stories WHERE id = ?")
+        for row in stmt.bind(id) {
+            if let count = row[0] as? Int64 {
+                return count > 0
+            }
+        }
+    } catch {}
+    return false
+}
+
+func pageExists(_ id: String, inNotebook notebookID: String) -> Bool {
+    do {
+        let db = try Connection("inklings.sqlite3")
+        let stmt = try db.prepare("SELECT COUNT(*) FROM pages WHERE id = ? AND notebookID = ?")
+        for row in stmt.bind(id, notebookID) {
+            if let count = row[0] as? Int64 {
+                return count > 0
+            }
+        }
+    } catch {}
+    return false
 }
 
 func generateWhimsicalToken() -> String {
