@@ -279,6 +279,7 @@ server["/"] = scopes {
     guard pageExists(pageID, inNotebook: notebookID) else {
       return HttpResponse.notFound()
     }
+    let userID = getCurrentUser(from: request)
     var formData = [String: String]();
     for (key,value) in request.parseUrlencodedForm() {
       formData[key] = value;
@@ -287,7 +288,7 @@ server["/"] = scopes {
     let textBody = formData["body"]!;
     let published = Int(formData["published"] ?? "1") ?? 1;
 
-    savePage(pageID, inNotebook: notebookID, title: title, textBody: textBody, published: published);
+    savePage(pageID, inNotebook: notebookID, title: title, textBody: textBody, published: published, savedBy: userID);
 
     return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(notebookID)/\(pageID)"], nil)
   }
@@ -297,6 +298,7 @@ server.POST["/notebook/:notebook/page/create"] = { request in
     guard notebookExists(notebookID) else {
       return HttpResponse.notFound()
     }
+    let userID = getCurrentUser(from: request)
     var formData = [String: String]();
     for (key,value) in request.parseUrlencodedForm() {
       formData[key] = value;
@@ -305,7 +307,7 @@ server.POST["/notebook/:notebook/page/create"] = { request in
     let textBody = formData["body"]!;
     let published = Int(formData["published"] ?? "1") ?? 1;
 
-    let newPageID = createPage(inNotebook: notebookID, title: title, textBody: textBody, published: published);
+    let newPageID = createPage(inNotebook: notebookID, title: title, textBody: textBody, published: published, createdBy: userID);
 
     return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(notebookID)/\(newPageID)"], nil)
   }
@@ -971,7 +973,7 @@ func editPage(_ pageID: String?, inNotebook notebookID: String, forUser userID: 
   }
 }
 
-func savePage(_ pageID: String, inNotebook notebookID: String, title: String, textBody: String, published: Int) {
+func savePage(_ pageID: String, inNotebook notebookID: String, title: String, textBody: String, published: Int, savedBy userID: Int? = nil) {
   do {
     //TODO: check that the user is allowed to do this
     let pages = Table("pages");
@@ -984,18 +986,27 @@ func savePage(_ pageID: String, inNotebook notebookID: String, title: String, te
     let db = try Connection("inklings.sqlite3");
     
     let page = pages.filter(idExpression == pageID && notebookIDExpression == notebookID)
-    try db.run(page.update(titleExpression <- title, bodyExpression <- textBody, publishedExpression <- published));
+    try db.run(page.update(titleExpression <- title, bodyExpression <- textBody, publishedExpression <- published))
+    
+    // Record this version in history
+    let archiveSQL = "INSERT INTO page_versions (notebookID, pageID, title, body, published, savedBy) VALUES (?, ?, ?, ?, ?, ?)"
+    try db.run(archiveSQL, notebookID, pageID, title, textBody, published, userID)
   } catch {
     print("Error saving page: \(error)")
   }
 }
 
-func createPage(inNotebook notebookID: String, title: String, textBody: String, published: Int) -> String {
+func createPage(inNotebook notebookID: String, title: String, textBody: String, published: Int, createdBy userID: Int? = nil) -> String {
   do {
     let db = try Connection("inklings.sqlite3");
     let id = generateUniquePageID(from: title, inNotebook: notebookID)
     let insertPage = "INSERT INTO pages (id, notebookID, title, body, published) VALUES (?, ?, ?, ?, ?)"
     try db.run(insertPage, id, notebookID, title, textBody, published)
+    
+    // Record initial version in history
+    let archiveSQL = "INSERT INTO page_versions (notebookID, pageID, title, body, published, savedBy) VALUES (?, ?, ?, ?, ?, ?)"
+    try db.run(archiveSQL, notebookID, id, title, textBody, published, userID)
+    
     return id
   } catch {
     print("Error creating page: \(error)")
