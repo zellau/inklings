@@ -973,24 +973,34 @@ func editPage(_ pageID: String?, inNotebook notebookID: String, forUser userID: 
   }
 }
 
-func savePage(_ pageID: String, inNotebook notebookID: String, title: String, textBody: String, published: Int, savedBy userID: Int? = nil) {
+func savePage(_ pageID: String, inNotebook notebookID: String, title: String, textBody: String, published: Int, position: Int? = nil, savedBy userID: Int? = nil) {
   do {
     //TODO: check that the user is allowed to do this
-    let pages = Table("pages");
+    let pages = Table("pages")
     let idExpression = Expression<String>("id")
     let notebookIDExpression = Expression<String>("notebookID")
     let titleExpression = Expression<String>("title")
     let bodyExpression = Expression<String>("body")
     let publishedExpression = Expression<Int>("published")
+    let positionExpression = Expression<Int>("position")
 
-    let db = try Connection("inklings.sqlite3");
+    let db = try Connection("inklings.sqlite3")
+
+    // Get current position if not provided
+    var finalPosition = position ?? 1
+    if position == nil {
+      let query = pages.where(idExpression == pageID && notebookIDExpression == notebookID)
+      if let page = try db.pluck(query) {
+        finalPosition = page[positionExpression]
+      }
+    }
     
     let page = pages.filter(idExpression == pageID && notebookIDExpression == notebookID)
-    try db.run(page.update(titleExpression <- title, bodyExpression <- textBody, publishedExpression <- published))
+    try db.run(page.update(titleExpression <- title, bodyExpression <- textBody, publishedExpression <- published, positionExpression <- finalPosition))
     
     // Record this version in history
-    let archiveSQL = "INSERT INTO page_versions (notebookID, pageID, title, body, published, savedBy) VALUES (?, ?, ?, ?, ?, ?)"
-    try db.run(archiveSQL, notebookID, pageID, title, textBody, published, userID)
+    let archiveSQL = "INSERT INTO page_versions (notebookID, pageID, title, body, published, savedBy, position) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    try db.run(archiveSQL, notebookID, pageID, title, textBody, published, userID, finalPosition)
   } catch {
     print("Error saving page: \(error)")
   }
@@ -998,14 +1008,21 @@ func savePage(_ pageID: String, inNotebook notebookID: String, title: String, te
 
 func createPage(inNotebook notebookID: String, title: String, textBody: String, published: Int, createdBy userID: Int? = nil) -> String {
   do {
-    let db = try Connection("inklings.sqlite3");
+    let db = try Connection("inklings.sqlite3")
     let id = generateUniquePageID(from: title, inNotebook: notebookID)
-    let insertPage = "INSERT INTO pages (id, notebookID, title, body, published) VALUES (?, ?, ?, ?, ?)"
-    try db.run(insertPage, id, notebookID, title, textBody, published)
+    
+    // Get next position
+    var position = 1
+    for row in try db.prepare("SELECT COALESCE(MAX(position), 0) + 1 FROM pages WHERE notebookID = ?", notebookID) {
+      position = Int(row[0] as! Int64)
+    }
+    
+    let insertPage = "INSERT INTO pages (id, notebookID, title, body, published, position) VALUES (?, ?, ?, ?, ?, ?)"
+    try db.run(insertPage, id, notebookID, title, textBody, published, position)
     
     // Record initial version in history
-    let archiveSQL = "INSERT INTO page_versions (notebookID, pageID, title, body, published, savedBy) VALUES (?, ?, ?, ?, ?, ?)"
-    try db.run(archiveSQL, notebookID, id, title, textBody, published, userID)
+    let archiveSQL = "INSERT INTO page_versions (notebookID, pageID, title, body, published, savedBy, position) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    try db.run(archiveSQL, notebookID, id, title, textBody, published, userID, position)
     
     return id
   } catch {
@@ -1135,6 +1152,7 @@ func showNotebook(_ notebookID: String, toUser user: Int) {
     let title = Expression<String>("title")
     let description = Expression<String>("description")
     let publishedExpression = Expression<Int>("published")
+    let positionExpression = Expression<Int>("position")
 
     let userID = Expression<Int>("userID")
     let role = Expression<Int>("role")
@@ -1157,7 +1175,7 @@ func showNotebook(_ notebookID: String, toUser user: Int) {
     }
     
     // Get all pages and filter by permission
-    let allPages = pagesTable.where(notebookIDExpression == notebookID)
+    let allPages = pagesTable.where(notebookIDExpression == notebookID).order(positionExpression)
     var visiblePages: [(id: String, title: String)] = []
     for page in try db.prepare(allPages) {
       let pagePublished = page[publishedExpression]
