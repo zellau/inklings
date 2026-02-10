@@ -558,3 +558,16 @@ nav input[type="text"]::placeholder {
 .pageNav .nextPage {
     text-align: right;
 }
+
+/* Drag and drop for page reordering */
+#pageList.sortable .pageItem {
+    cursor: grab;
+}
+
+#pageList.sortable .pageItem:active {
+    cursor: grabbing;
+}
+
+#pageList.sortable .sortable-ghost {
+    opacity: 0.4;
+}

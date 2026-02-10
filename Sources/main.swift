@@ -312,6 +312,25 @@ server.POST["/notebook/:notebook/page/create"] = { request in
     return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(notebookID)/\(newPageID)"], nil)
   }
 
+server.POST["/notebook/:notebook/reorder"] = { request in
+    let notebookID = request.params[":notebook"] ?? ""
+    guard notebookExists(notebookID) else {
+      return HttpResponse.notFound()
+    }
+    
+    // Parse JSON body
+    let bodyData = Data(request.body)
+    guard let json = try? JSONSerialization.jsonObject(with: bodyData) as? [String: Any],
+          let pageIds = json["pages"] as? [String] else {
+      return HttpResponse.badRequest(nil)
+    }
+    
+    // Update positions
+    reorderPages(inNotebook: notebookID, pageIds: pageIds)
+    
+    return HttpResponse.ok(.text("OK"))
+  }
+
 server.POST["/search"] = { request in
     var formData = [String: String]()
     for (key, value) in request.parseUrlencodedForm() {
@@ -1120,6 +1139,18 @@ func createPage(inNotebook notebookID: String, title: String, textBody: String, 
   }
 }
 
+func reorderPages(inNotebook notebookID: String, pageIds: [String]) {
+  do {
+    let db = try Connection("inklings.sqlite3")
+    for (index, pageId) in pageIds.enumerated() {
+      let position = index + 1
+      try db.run("UPDATE pages SET position = ? WHERE notebookID = ? AND id = ?", position, notebookID, pageId)
+    }
+  } catch {
+    print("Error reordering pages: \(error)")
+  }
+}
+
 enum Roles: Int {
   case writer = 1
   case editor
@@ -1276,29 +1307,58 @@ func showNotebook(_ notebookID: String, toUser user: Int) {
     }
 
     // Show notebook if user has any visible pages
-    if !visiblePages.isEmpty || userRole == Roles.writer.rawValue {
+    let isWriter = userRole == Roles.writer.rawValue
+    if !visiblePages.isEmpty || isWriter {
       h2 {
         inner = story[title];
       }
       p {
         inner = story[description];
       }
-      for page in visiblePages {
-        a {
-          classs = "blocklink"
-          href = "/notebook/\(notebookID)/\(page.id)"
-          h3 {
-            inner = page.title
+      div {
+        idd = "pageList"
+        if isWriter {
+          classs = "sortable"
+        }
+        for page in visiblePages {
+          a {
+            classs = "blocklink pageItem"
+            href = "/notebook/\(notebookID)/\(page.id)"
+            h3 {
+              inner = page.title
+            }
           }
         }
       }
-      if (userRole == Roles.writer.rawValue) {
+      if isWriter {
         a {
           classs = "blocklink"
           href = "/notebook/\(notebookID)/new"
           h3 {
             inner = "New page"
           }
+        }
+        script {
+          src = "https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"
+        }
+        script {
+          inner = """
+            document.addEventListener('DOMContentLoaded', function() {
+              new Sortable(document.getElementById('pageList'), {
+                animation: 150,
+                draggable: '.pageItem',
+                onEnd: function() {
+                  const pageIds = Array.from(document.querySelectorAll('#pageList .pageItem'))
+                    .map(el => el.href.split('/').pop());
+                  fetch('/notebook/\(notebookID)/reorder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pages: pageIds })
+                  });
+                }
+              });
+            });
+          """
         }
       }
     } else {
