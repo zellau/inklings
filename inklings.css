@@ -534,3 +534,27 @@ nav input[type="text"]::placeholder {
     height: 8px;
     border-radius: 4px;
 }
+
+/* Page navigation */
+.pageNav {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 10px;
+}
+
+.pageNav a {
+    color: #666;
+    text-decoration: none;
+}
+
+.pageNav a:hover {
+    color: #333;
+}
+
+.pageNav .prevPage {
+    text-align: left;
+}
+
+.pageNav .nextPage {
+    text-align: right;
+}

@@ -45,7 +45,7 @@ server["/login"] = { request in
     return scopes {
         html {
             head {
-                addStylesheet()
+                addHead()
             }
             body {
                 makeHeader()
@@ -74,7 +74,7 @@ server.POST["/logout"] = { request in
 server["/"] = scopes { 
     html {
       head {
-        addStylesheet();
+        addHead();
       }
       body {
         makeHeader();
@@ -88,7 +88,7 @@ server["/"] = scopes {
     return scopes {
       html {
         head {
-          addStylesheet()
+          addHead()
         }
         body {
           makeHeader()
@@ -103,7 +103,7 @@ server["/"] = scopes {
     return scopes {
       html {
         head {
-          addStylesheet()
+          addHead()
         }
         body {
           makeHeader()
@@ -141,7 +141,7 @@ server["/"] = scopes {
        return scopes {
          html {
            head {
-             addStylesheet()
+             addHead()
            }
            body {
              makeHeader()
@@ -193,7 +193,7 @@ server["/"] = scopes {
      return scopes {
       html {
         head {
-          addStylesheet();
+          addHead();
         }
         body {
           makeHeader();
@@ -220,7 +220,7 @@ server["/"] = scopes {
       return scopes {
         html {
           head {
-            addStylesheet();
+            addHead();
           }
           body {
             makeHeader();
@@ -236,7 +236,7 @@ server["/"] = scopes {
      return scopes {
       html {
         head {
-          addStylesheet();
+          addHead();
         }
         body {
           makeHeader();
@@ -260,7 +260,7 @@ server["/"] = scopes {
      return scopes {
       html {
         head {
-          addStylesheet();
+          addHead();
         }
         body {
           makeHeader();
@@ -323,7 +323,7 @@ server.POST["/search"] = { request in
     return scopes {
       html {
         head {
-          addStylesheet()
+          addHead()
         }
         body {
           makeHeader()
@@ -342,7 +342,7 @@ server["/account"] = { request in
     return scopes {
         html {
             head {
-                addStylesheet()
+                addHead()
             }
             body {
                 makeHeader()
@@ -467,7 +467,10 @@ print("Server has started ( port = \(try server.port()) ). Try to connect now...
 import Dispatch
 DispatchSemaphore(value: 0).wait()
 
-func addStylesheet() -> () {
+func addHead() -> () {
+  meta {
+    charset = "utf-8"
+  }
   link {
     rel = "stylesheet"
     href = "/inklings.css"
@@ -533,6 +536,7 @@ func showPage(_ pageID: String, inNotebook notebookID: String, toUser user: Int)
     let title = Expression<String>("title")
     let body = Expression<String>("body")
     let publishedExpression = Expression<Int>("published")
+    let positionExpression = Expression<Int>("position")
     let userID = Expression<Int>("userID")
     let role = Expression<Int>("role")
 
@@ -554,6 +558,33 @@ func showPage(_ pageID: String, inNotebook notebookID: String, toUser user: Int)
     let canView = pagePublished == Published.fully_public.rawValue || (userRole != nil && userRole! <= pagePublished)
 
     if canView {
+      // Find prev/next visible pages for navigation
+      let currentPosition = page[positionExpression]
+      
+      var prevPage: (id: String, title: String)? = nil
+      let prevQuery = pages.where(notebookIDExpression == notebookID && positionExpression < currentPosition)
+                           .order(positionExpression.desc)
+      for p in try db.prepare(prevQuery) {
+        let pPublished = p[publishedExpression]
+        let canViewPrev = pPublished == Published.fully_public.rawValue || (userRole != nil && userRole! <= pPublished)
+        if canViewPrev {
+          prevPage = (id: p[idExpression], title: p[title])
+          break
+        }
+      }
+      
+      var nextPage: (id: String, title: String)? = nil
+      let nextQuery = pages.where(notebookIDExpression == notebookID && positionExpression > currentPosition)
+                           .order(positionExpression.asc)
+      for p in try db.prepare(nextQuery) {
+        let pPublished = p[publishedExpression]
+        let canViewNext = pPublished == Published.fully_public.rawValue || (userRole != nil && userRole! <= pPublished)
+        if canViewNext {
+          nextPage = (id: p[idExpression], title: p[title])
+          break
+        }
+      }
+      
       // Fetch comments and generate custom font CSS
       let comments = getComments(forPage: pageID, inNotebook: notebookID)
       var customFontCSS = ""
@@ -592,6 +623,35 @@ func showPage(_ pageID: String, inNotebook notebookID: String, toUser user: Int)
             h2 {
               inner = page[title]
             }
+            div {
+              classs = "pageNav pageNavTop"
+              if let prev = prevPage {
+                a {
+                  href = "/notebook/\(notebookID)/\(prev.id)"
+                  classs = "prevPage"
+                  inner = "← \(prev.title)"
+                }
+              } else {
+                a {
+                  href = "/notebook/\(notebookID)"
+                  classs = "prevPage"
+                  inner = "← Back to notebook"
+                }
+              }
+              if let next = nextPage {
+                a {
+                  href = "/notebook/\(notebookID)/\(next.id)"
+                  classs = "nextPage"
+                  inner = "\(next.title) →"
+                }
+              } else if prevPage != nil {
+                a {
+                  href = "/notebook/\(notebookID)"
+                  classs = "nextPage"
+                  inner = "Back to notebook →"
+                }
+              }
+            }
             if (userRole == Roles.writer.rawValue) { // Author view
               let publishedLabels = ["Authors only", "Editors", "Beta readers", "Subscribed readers", "All inklings", "Anyone"]
               let publishedValue = page[publishedExpression]
@@ -615,6 +675,35 @@ func showPage(_ pageID: String, inNotebook notebookID: String, toUser user: Int)
             div {
               idd = "pageBody"
               inner = renderBodyWithInlineComments(page[body], comments: comments)
+            }
+            div {
+              classs = "pageNav"
+              if let prev = prevPage {
+                a {
+                  href = "/notebook/\(notebookID)/\(prev.id)"
+                  classs = "prevPage"
+                  inner = "← \(prev.title)"
+                }
+              } else {
+                a {
+                  href = "/notebook/\(notebookID)"
+                  classs = "prevPage"
+                  inner = "← Back to notebook"
+                }
+              }
+              if let next = nextPage {
+                a {
+                  href = "/notebook/\(notebookID)/\(next.id)"
+                  classs = "nextPage"
+                  inner = "\(next.title) →"
+                }
+              } else if prevPage != nil {
+                a {
+                  href = "/notebook/\(notebookID)"
+                  classs = "nextPage"
+                  inner = "Back to notebook →"
+                }
+              }
             }
           }
           div {
