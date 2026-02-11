@@ -10,6 +10,7 @@ docker stop $(docker ps --format '{{.Names}}')
 import Swifter
 import SQLite
 import Foundation
+import InklingsLib
 
 let server = HttpServer()
 server["/octopus.png"] = shareFile("./octopus.png")
@@ -2391,12 +2392,4 @@ func getUserPreferences(forUser userID: Int) -> (color: String, font: String) {
         // log error
     }
     return (color: "#333333", font: "Handwriting")
-}
-
-// MARK: - Word Count
-
-func countWords(_ text: String) -> Int {
-    let words = text.components(separatedBy: .whitespacesAndNewlines)
-        .filter { !$0.isEmpty }
-    return words.count
 }
