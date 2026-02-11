@@ -2392,3 +2392,11 @@ func getUserPreferences(forUser userID: Int) -> (color: String, font: String) {
     }
     return (color: "#333333", font: "Handwriting")
 }
+
+// MARK: - Word Count
+
+func countWords(_ text: String) -> Int {
+    let words = text.components(separatedBy: .whitespacesAndNewlines)
+        .filter { !$0.isEmpty }
+    return words.count
+}
