@@ -203,4 +203,114 @@ final class RenderBodyWithInlineCommentsTests: XCTestCase {
         // Expected: "<p class='notebook'>Hello, hello, <span...>hello</span> world!</p>"
         XCTAssertTrue(result.contains("Hello, hello, <span"), "Comment should be on 3rd 'hello', not earlier ones")
     }
+    
+    func testTwoOverlappingComments() {
+        // "The quick brown fox" with comments on "quick brown" and "brown fox"
+        let comment1 = Comment(
+            id: 1,
+            userName: "Alice",
+            commentText: "Nice phrase",
+            selectedText: "quick brown",
+            startOffset: 4,
+            endOffset: 15,
+            fontColor: "#ff0000",
+            fontName: "Handwriting"
+        )
+        let comment2 = Comment(
+            id: 2,
+            userName: "Bob",
+            commentText: "Classic combo",
+            selectedText: "brown fox",
+            startOffset: 10,
+            endOffset: 19,
+            fontColor: "#00ff00",
+            fontName: "Handwriting"
+        )
+        let result = renderBodyWithInlineComments("The quick brown fox", comments: [comment1, comment2])
+        
+        // Both comments should appear
+        XCTAssertTrue(result.contains("Nice phrase"), "First comment text should appear")
+        XCTAssertTrue(result.contains("Alice"), "First commenter should appear")
+        XCTAssertTrue(result.contains("Classic combo"), "Second comment text should appear")
+        XCTAssertTrue(result.contains("Bob"), "Second commenter should appear")
+        
+        // "brown" should be in the overlap (both comment IDs)
+        XCTAssertTrue(result.contains("data-comment-ids=\"1,2\"") || result.contains("data-comment-ids=\"2,1\""), 
+            "Overlapping segment should have both comment IDs")
+        XCTAssertTrue(result.contains("data-comment-ids=\"1\""), 
+            "Non-overlapping segment should have alice's ID")
+        XCTAssertTrue(result.contains("data-comment-ids=\"2\""), 
+            "Non-overlapping segment should have bob's ID")
+    }
+    
+    func testNestedComments() {
+        // "Hello world" with comments on "Hello world" and "world"
+        let comment1 = Comment(
+            id: 1,
+            userName: "Alice",
+            commentText: "Outer comment",
+            selectedText: "Hello world",
+            startOffset: 0,
+            endOffset: 11,
+            fontColor: "#ff0000",
+            fontName: "Handwriting"
+        )
+        let comment2 = Comment(
+            id: 2,
+            userName: "Bob",
+            commentText: "Inner comment",
+            selectedText: "world",
+            startOffset: 6,
+            endOffset: 11,
+            fontColor: "#00ff00",
+            fontName: "Handwriting"
+        )
+        let result = renderBodyWithInlineComments("Hello world", comments: [comment1, comment2])
+        
+        // Both comments should appear
+        XCTAssertTrue(result.contains("Outer comment"), "Outer comment should appear")
+        XCTAssertTrue(result.contains("Inner comment"), "Inner comment should appear")
+        
+        // "world" should have both comment IDs (nested)
+        XCTAssertTrue(result.contains("data-comment-ids=\"1,2\"") || result.contains("data-comment-ids=\"2,1\""),
+            "Nested segment should have both comment IDs")
+        XCTAssertTrue(result.contains("data-comment-ids=\"1\""), 
+            "Non-nested segment should only have alice's ID")
+        XCTAssertFalse(result.contains("data-comment-ids=\"2\""), 
+            "Bob's ID should not appear alone anywhere")
+
+    }
+    
+    func testAdjacentNonOverlappingComments() {
+        // "Hello world" with comments on "Hello" and "world" (no overlap)
+        let comment1 = Comment(
+            id: 1,
+            userName: "Alice",
+            commentText: "Greeting",
+            selectedText: "Hello",
+            startOffset: 0,
+            endOffset: 5,
+            fontColor: "#ff0000",
+            fontName: "Handwriting"
+        )
+        let comment2 = Comment(
+            id: 2,
+            userName: "Bob",
+            commentText: "Planet",
+            selectedText: "world",
+            startOffset: 6,
+            endOffset: 11,
+            fontColor: "#00ff00",
+            fontName: "Handwriting"
+        )
+        let result = renderBodyWithInlineComments("Hello world", comments: [comment1, comment2])
+        
+        // Both comments should appear
+        XCTAssertTrue(result.contains("Greeting"), "First comment should appear")
+        XCTAssertTrue(result.contains("Planet"), "Second comment should appear")
+        
+        // Each segment should have only one comment ID
+        XCTAssertTrue(result.contains("data-comment-ids=\"1\""), "First segment should have only comment 1")
+        XCTAssertTrue(result.contains("data-comment-ids=\"2\""), "Second segment should have only comment 2")
+    }
 }
