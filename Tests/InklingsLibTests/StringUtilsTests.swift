@@ -80,3 +80,108 @@ final class FormatBodyInHTMLTests: XCTestCase {
         )
     }
 }
+
+final class RenderBodyWithInlineCommentsTests: XCTestCase {
+    
+    func testNoComments() {
+        let result = renderBodyWithInlineComments("Hello world", comments: [])
+        XCTAssertEqual(result, "<p class='notebook'>Hello world</p>")
+    }
+    
+    func testCommentWithoutSelectedText() {
+        let comment = Comment(
+            id: 1,
+            userName: "Alice",
+            commentText: "Nice!",
+            selectedText: nil,
+            startOffset: nil,
+            endOffset: nil,
+            fontColor: "#333",
+            fontName: "Handwriting"
+        )
+        let result = renderBodyWithInlineComments("Hello world", comments: [comment])
+        // Should return just formatted body since no selectedText
+        XCTAssertEqual(result, "<p class='notebook'>Hello world</p>")
+    }
+    
+    func testCommentWithEmptySelectedText() {
+        let comment = Comment(
+            id: 1,
+            userName: "Alice",
+            commentText: "Nice!",
+            selectedText: "",
+            startOffset: nil,
+            endOffset: nil,
+            fontColor: "#333",
+            fontName: "Handwriting"
+        )
+        let result = renderBodyWithInlineComments("Hello world", comments: [comment])
+        XCTAssertEqual(result, "<p class='notebook'>Hello world</p>")
+    }
+    
+    func testSingleComment() {
+        let comment = Comment(
+            id: 1,
+            userName: "Alice",
+            commentText: "Great word!",
+            selectedText: "Hello",
+            startOffset: 0,
+            endOffset: 5,
+            fontColor: "#ff0000",
+            fontName: "Handwriting"
+        )
+        let result = renderBodyWithInlineComments("Hello world", comments: [comment])
+        
+        let expected = "<p class='notebook'><span class=\"comment-anchor\"><span class=\"commented-text\" data-comment-ids=\"1\" style=\"background: linear-gradient(#ff0000, #ff0000) 0 1.15em / 100% 2px no-repeat; padding-bottom: 4px;\">Hello</span><span class=\"inline-comment\" data-comment-id=\"1\" style=\"color: #ff0000; font-family: Handwriting;\">Great word! &mdash;Alice</span></span> world</p>"
+        
+        XCTAssertEqual(result, expected)
+    }
+    
+    func testCommentSelectedTextNotFound() {
+        let comment = Comment(
+            id: 1,
+            userName: "Alice",
+            commentText: "Nice!",
+            selectedText: "Goodbye",
+            startOffset: nil,
+            endOffset: nil,
+            fontColor: "#333",
+            fontName: "Handwriting"
+        )
+        let result = renderBodyWithInlineComments("Hello world", comments: [comment])
+        // Selected text not in body, should return just formatted body
+        XCTAssertEqual(result, "<p class='notebook'>Hello world</p>")
+    }
+    
+    func testCustomFontFamily() {
+        let comment = Comment(
+            id: 1,
+            userName: "Alice",
+            commentText: "Nice!",
+            selectedText: "Hello",
+            startOffset: 0,
+            endOffset: 5,
+            fontColor: "#333",
+            fontName: "custom-myfont"
+        )
+        let result = renderBodyWithInlineComments("Hello world", comments: [comment])
+        // Custom fonts should be quoted
+        XCTAssertTrue(result.contains("font-family: 'custom-myfont'"))
+    }
+    
+    func testStandardFontFamily() {
+        let comment = Comment(
+            id: 1,
+            userName: "Alice",
+            commentText: "Nice!",
+            selectedText: "Hello",
+            startOffset: 0,
+            endOffset: 5,
+            fontColor: "#333",
+            fontName: "Handwriting"
+        )
+        let result = renderBodyWithInlineComments("Hello world", comments: [comment])
+        // Standard fonts should not be quoted
+        XCTAssertTrue(result.contains("font-family: Handwriting;"))
+    }
+}
