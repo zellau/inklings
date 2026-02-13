@@ -22,3 +22,42 @@ public func getWritingDay(for date: Date, timezone: TimeZone) -> String {
     
     return String(format: "%04d-%02d-%02d", year, month, day)
 }
+
+/// Determines if a streak should continue based on current state.
+/// Returns true if streak continues, false if it should reset to 1.
+///
+/// Streak continues if ANY of:
+/// - lastGoalMetDate == today (already counted today)
+/// - lastGoalMetDate == yesterday (met goal yesterday)
+/// - streakFrozen == true (frozen protects gaps)
+/// - unfrozenAt == today (grace period after unfreeze)
+public func shouldStreakContinue(
+    lastGoalMetDate: String?,
+    today: String,
+    yesterday: String,
+    streakFrozen: Bool,
+    unfrozenAt: String?
+) -> Bool {
+    // Already met goal today
+    if lastGoalMetDate == today {
+        return true
+    }
+    
+    // Met goal yesterday - streak continues
+    if lastGoalMetDate == yesterday {
+        return true
+    }
+    
+    // Streak is frozen - gaps don't break it
+    if streakFrozen {
+        return true
+    }
+    
+    // Just unfroze today - grace period
+    if unfrozenAt == today {
+        return true
+    }
+    
+    // No conditions met - streak resets
+    return false
+}
