@@ -10,6 +10,7 @@ docker stop $(docker ps --format '{{.Names}}')
 import Swifter
 import SQLite
 import Foundation
+import InklingsLib
 
 let server = HttpServer()
 server["/octopus.png"] = shareFile("./octopus.png")
@@ -2213,20 +2214,6 @@ func getUserFromSession(_ sessionID: String?) -> Int? {
     return nil
 }
 
-func generateID(from title: String) -> String {
-    // Convert to lowercase and replace spaces/special chars with dashes
-    let allowed = CharacterSet.alphanumerics
-    var id = title.lowercased()
-        .components(separatedBy: allowed.inverted)
-        .filter { !$0.isEmpty }
-        .joined(separator: "-")
-    
-    if id.isEmpty {
-        id = "untitled"
-    }
-    
-    return id
-}
 
 func generateUniqueNotebookID(from title: String) -> String {
     let baseID = generateID(from: title)
