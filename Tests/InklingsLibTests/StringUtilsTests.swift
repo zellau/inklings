@@ -184,4 +184,23 @@ final class RenderBodyWithInlineCommentsTests: XCTestCase {
         // Standard fonts should not be quoted
         XCTAssertTrue(result.contains("font-family: Handwriting;"))
     }
+
+    func testCommentOnRepeatedWord() {
+        // "Hello, hello, hello world!" - we want to comment on the 3rd "hello" (positions 14-19)
+        let comment = Comment(
+            id: 1,
+            userName: "Editor",
+            commentText: "Too many repetitions",
+            selectedText: "hello",
+            startOffset: 14,
+            endOffset: 19,
+            fontColor: "#0000ff",
+            fontName: "Handwriting"
+        )
+        let result = renderBodyWithInlineComments("Hello, hello, hello world!", comments: [comment])
+        
+        // The comment should be on the 3rd "hello", not the 1st or 2nd
+        // Expected: "<p class='notebook'>Hello, hello, <span...>hello</span> world!</p>"
+        XCTAssertTrue(result.contains("Hello, hello, <span"), "Comment should be on 3rd 'hello', not earlier ones")
+    }
 }

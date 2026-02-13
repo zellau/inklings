@@ -60,7 +60,41 @@ public func renderBodyWithInlineComments(_ bodyUnformatted: String, comments: [C
     
     for comment in inlineComments {
         guard let selectedText = comment.selectedText else { continue }
-        // Find the selected text in the body
+        
+        // If we have startOffset, use it to find the correct occurrence
+        if let startOffset = comment.startOffset {
+            // Calculate the offset adjustment for the HTML formatting
+            // For each paragraph, we add "<p class='notebook'>" before and "</p>" after
+            var adjustment = 0
+            let lines = bodyUnformatted.components(separatedBy: "\n")
+            var currentPos = 0
+            
+            for (index, line) in lines.enumerated() {
+                if currentPos + line.count >= startOffset {
+                    // The offset is in this line
+                    adjustment = (index + 1) * "<p class='notebook'>".count + index * "</p>".count
+                    break
+                }
+                currentPos += line.count + 1  // +1 for newline
+            }
+            
+            let adjustedStart = startOffset + adjustment
+            let adjustedEnd = adjustedStart + selectedText.count
+            
+            // Verify the text at this position matches
+            let startIndex = body.index(body.startIndex, offsetBy: adjustedStart, limitedBy: body.endIndex)
+            let endIndex = startIndex.flatMap { body.index($0, offsetBy: selectedText.count, limitedBy: body.endIndex) }
+            
+            if let start = startIndex, let end = endIndex {
+                let textAtPosition = String(body[start..<end])
+                if textAtPosition.lowercased() == selectedText.lowercased() {
+                    commentRanges.append((start: adjustedStart, end: adjustedEnd, id: comment.id, userName: comment.userName, commentText: comment.commentText, fontColor: comment.fontColor, fontName: comment.fontName))
+                    continue
+                }
+            }
+        }
+        
+        // Fallback: find the first occurrence of selected text in the body
         if let range = body.range(of: selectedText) {
             let start = body.distance(from: body.startIndex, to: range.lowerBound)
             let end = body.distance(from: body.startIndex, to: range.upperBound)
