@@ -40,3 +40,43 @@ final class StringUtilsTests: XCTestCase {
         XCTAssertEqual(generateID(from: "  hello world  "), "hello-world")
     }
 }
+
+final class FormatBodyInHTMLTests: XCTestCase {
+    
+    func testSingleParagraph() {
+        XCTAssertEqual(
+            formatBodyInHTML("Hello world"),
+            "<p class='notebook'>Hello world</p>"
+        )
+    }
+    
+    func testMultipleParagraphs() {
+        XCTAssertEqual(
+            formatBodyInHTML("First\nSecond\nThird"),
+            "<p class='notebook'>First</p><p class='notebook'>Second</p><p class='notebook'>Third</p>"
+        )
+    }
+    
+    func testEmptyString() {
+        XCTAssertEqual(
+            formatBodyInHTML(""),
+            "<p class='notebook'></p>"
+        )
+    }
+    
+    func testEmptyLines() {
+        XCTAssertEqual(
+            formatBodyInHTML("First\n\nThird"),
+            "<p class='notebook'>First</p><p class='notebook'></p><p class='notebook'>Third</p>"
+        )
+    }
+    
+    func testSpecialCharacters() {
+        // TODO: This function does NOT escape HTML - potential XSS vulnerability
+        // Input containing <script> tags passes through unchanged
+        XCTAssertEqual(
+            formatBodyInHTML("<script>alert('xss')</script>"),
+            "<p class='notebook'><script>alert('xss')</script></p>"
+        )
+    }
+}

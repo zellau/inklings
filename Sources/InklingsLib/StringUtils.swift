@@ -14,3 +14,11 @@ public func generateID(from title: String) -> String {
     
     return id
 }
+
+public func formatBodyInHTML(_ body: String) -> String {
+    let paragraphs = body.components(separatedBy: "\n")
+    let formattedParagraphs = paragraphs.map { p in
+        return "<p class='notebook'>\(p)</p>"
+    }
+    return formattedParagraphs.joined()
+}
