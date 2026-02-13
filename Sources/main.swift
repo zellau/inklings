@@ -289,6 +289,14 @@ server["/"] = scopes {
     let textBody = formData["body"]!;
     let published = Int(formData["published"] ?? "1") ?? 1;
 
+    // Calculate new words written
+    let oldWordCount = getPageWordCount(pageID: pageID, inNotebook: notebookID)
+    let newWordCount = countWords(textBody)
+    let wordsAdded = max(0, newWordCount - oldWordCount)
+    if wordsAdded > 0, let uid = userID {
+        addWordsToDaily(userID: uid, wordCount: wordsAdded)
+    }
+
     savePage(pageID, inNotebook: notebookID, title: title, textBody: textBody, published: published, savedBy: userID);
 
     return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(notebookID)/\(pageID)"], nil)
@@ -309,6 +317,12 @@ server.POST["/notebook/:notebook/page/create"] = { request in
     let published = Int(formData["published"] ?? "1") ?? 1;
 
     let newPageID = createPage(inNotebook: notebookID, title: title, textBody: textBody, published: published, createdBy: userID);
+
+    // Track words for new page
+    let newWordCount = countWords(textBody)
+    if newWordCount > 0, let uid = userID {
+        addWordsToDaily(userID: uid, wordCount: newWordCount)
+    }
 
     return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(notebookID)/\(newPageID)"], nil)
   }
@@ -2392,4 +2406,147 @@ func getUserPreferences(forUser userID: Int) -> (color: String, font: String) {
         // log error
     }
     return (color: "#333333", font: "Handwriting")
+}
+
+// MARK: - Word Count Goals
+
+struct UserGoals {
+    var dailyWordGoal: Int = 200
+    var currentStreak: Int = 0
+    var longestStreak: Int = 0
+    var lastGoalMetDate: String? = nil
+    var streakFrozen: Bool = false
+    var frozenAt: String? = nil
+    var unfrozenAt: String? = nil
+    var timezone: String = "America/New_York"
+}
+
+func getUserGoals(forUser userID: Int) -> UserGoals {
+    var goals = UserGoals()
+    do {
+        let db = try Connection("inklings.sqlite3")
+        let stmt = try db.prepare(
+            "SELECT dailyWordGoal, currentStreak, longestStreak, lastGoalMetDate, streakFrozen, frozenAt, unfrozenAt, timezone FROM user_goals WHERE userID = ?",
+            userID
+        )
+        for row in stmt {
+            goals.dailyWordGoal = Int(row[0] as? Int64 ?? 200)
+            goals.currentStreak = Int(row[1] as? Int64 ?? 0)
+            goals.longestStreak = Int(row[2] as? Int64 ?? 0)
+            goals.lastGoalMetDate = row[3] as? String
+            goals.streakFrozen = (row[4] as? Int64 ?? 0) == 1
+            goals.frozenAt = row[5] as? String
+            goals.unfrozenAt = row[6] as? String
+            goals.timezone = row[7] as? String ?? "America/New_York"
+        }
+    } catch {
+        print("Error getting user goals: \(error)")
+    }
+    return goals
+}
+
+func getPageWordCount(pageID: String, inNotebook notebookID: String) -> Int {
+    do {
+        let db = try Connection("inklings.sqlite3")
+        let stmt = try db.prepare(
+            "SELECT body FROM pages WHERE id = ? AND notebookID = ?",
+            pageID, notebookID
+        )
+        for row in stmt {
+            if let body = row[0] as? String {
+                return countWords(body)
+            }
+        }
+    } catch {}
+    return 0
+}
+
+func addWordsToDaily(userID: Int, wordCount: Int) {
+    guard userID > 0, wordCount > 0 else { return }
+    
+    let goals = getUserGoals(forUser: userID)
+    let tz = TimeZone(identifier: goals.timezone) ?? TimeZone(identifier: "America/New_York")!
+    let today = getWritingDay(for: Date(), timezone: tz)
+    
+    do {
+        let db = try Connection("inklings.sqlite3")
+        try db.run("""
+            INSERT INTO daily_word_counts (userID, date, wordCount, goalMet)
+            VALUES (?, ?, ?, 0)
+            ON CONFLICT(userID, date) DO UPDATE SET wordCount = wordCount + ?
+            """, userID, today, wordCount, wordCount)
+        
+        // Check if goal is now met
+        let currentCount = getDailyWordCount(forUser: userID, date: today)
+        if currentCount >= goals.dailyWordGoal && !isGoalMet(forUser: userID, date: today) {
+            markGoalMet(forUser: userID, date: today)
+        }
+    } catch {
+        print("Error adding words to daily count: \(error)")
+    }
+}
+
+func getDailyWordCount(forUser userID: Int, date: String) -> Int {
+    do {
+        let db = try Connection("inklings.sqlite3")
+        let stmt = try db.prepare(
+            "SELECT wordCount FROM daily_word_counts WHERE userID = ? AND date = ?",
+            userID, date
+        )
+        for row in stmt {
+            return Int(row[0] as? Int64 ?? 0)
+        }
+    } catch {}
+    return 0
+}
+
+func isGoalMet(forUser userID: Int, date: String) -> Bool {
+    do {
+        let db = try Connection("inklings.sqlite3")
+        let stmt = try db.prepare(
+            "SELECT goalMet FROM daily_word_counts WHERE userID = ? AND date = ?",
+            userID, date
+        )
+        for row in stmt {
+            return (row[0] as? Int64 ?? 0) == 1
+        }
+    } catch {}
+    return false
+}
+
+func markGoalMet(forUser userID: Int, date: String) {
+    let goals = getUserGoals(forUser: userID)
+    let tz = TimeZone(identifier: goals.timezone) ?? TimeZone(identifier: "America/New_York")!
+    let yesterday = getWritingDay(for: Date().addingTimeInterval(-24 * 60 * 60), timezone: tz)
+    
+    let continues = shouldStreakContinue(
+        lastGoalMetDate: goals.lastGoalMetDate,
+        today: date,
+        yesterday: yesterday,
+        streakFrozen: goals.streakFrozen,
+        unfrozenAt: goals.unfrozenAt
+    )
+    
+    let newStreak = continues ? goals.currentStreak + 1 : 1
+    let newLongest = max(goals.longestStreak, newStreak)
+    
+    do {
+        let db = try Connection("inklings.sqlite3")
+        
+        // Mark goal as met
+        try db.run(
+            "UPDATE daily_word_counts SET goalMet = 1 WHERE userID = ? AND date = ?",
+            userID, date
+        )
+        
+        // Update streak
+        try db.run("""
+            INSERT INTO user_goals (userID, currentStreak, longestStreak, lastGoalMetDate)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(userID) DO UPDATE SET 
+                currentStreak = ?, longestStreak = ?, lastGoalMetDate = ?
+            """, userID, newStreak, newLongest, date, newStreak, newLongest, date)
+    } catch {
+        print("Error marking goal met: \(error)")
+    }
 }
