@@ -1419,8 +1419,8 @@ func saveComment(notebookID: String, pageID: String, userID: Int, commentText: S
   }
 }
 
-func getComments(forPage pageID: String, inNotebook notebookID: String) -> [(id: Int, userName: String, commentText: String, selectedText: String?, startOffset: Int?, endOffset: Int?, fontColor: String, fontName: String)] {
-  var comments: [(id: Int, userName: String, commentText: String, selectedText: String?, startOffset: Int?, endOffset: Int?, fontColor: String, fontName: String)] = []
+func getComments(forPage pageID: String, inNotebook notebookID: String) -> [Comment] {
+  var comments: [Comment] = []
   do {
     let db = try Connection("inklings.sqlite3")
     let stmt = try db.prepare("SELECT c.commentID, u.name, c.commentText, c.selectedText, c.startOffset, c.endOffset, u.preferredColor, u.preferredFont FROM comments c JOIN users u ON c.userID = u.userID WHERE c.notebookID = ? AND c.pageID = ? ORDER BY c.createdAt DESC", notebookID, pageID)
@@ -1433,7 +1433,7 @@ func getComments(forPage pageID: String, inNotebook notebookID: String) -> [(id:
       let endOffset = row[5] as? Int64
       let fontColor = row[6] as? String ?? "#333333"
       let fontName = row[7] as? String ?? "Handwriting"
-      comments.append((id: Int(id), userName: userName, commentText: commentText, selectedText: selectedText, startOffset: startOffset.map { Int($0) }, endOffset: endOffset.map { Int($0) }, fontColor: fontColor, fontName: fontName))
+      comments.append(Comment(id: Int(id), userName: userName, commentText: commentText, selectedText: selectedText, startOffset: startOffset.map { Int($0) }, endOffset: endOffset.map { Int($0) }, fontColor: fontColor, fontName: fontName))
     }
   } catch {
     // log error
@@ -2006,7 +2006,7 @@ func getCustomFontByID(_ fontID: Int) -> (fontName: String, fileName: String)? {
 }
 
 
-func renderBodyWithInlineComments(_ bodyUnformatted: String, comments: [(id: Int, userName: String, commentText: String, selectedText: String?, startOffset: Int?, endOffset: Int?, fontColor: String, fontName: String)]) -> String {
+func renderBodyWithInlineComments(_ bodyUnformatted: String, comments: [Comment]) -> String {
   let body = formatBodyInHTML(bodyUnformatted)
 
     // Filter to only comments with selected text
