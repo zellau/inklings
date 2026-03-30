@@ -635,6 +635,7 @@ func showPage(_ pageID: String, inNotebook notebookID: String, toUser user: Int)
       
       div {
         idd = "pageContainer"
+        classs = "contentContainer"
         // Left side: page content and comments
         div {
           idd = "leftColumn"
@@ -1310,70 +1311,82 @@ func showNotebook(_ notebookID: String, toUser user: Int) {
     // Show notebook if user has any visible pages
     let isWriter = userRole == Roles.writer.rawValue
     if !visiblePages.isEmpty || isWriter {
-      h2 {
-        inner = story[title];
-      }
-      p {
-        inner = story[description];
-      }
       div {
-        idd = "pageList"
-        if isWriter {
-          classs = "sortable"
+        classs = "contentContainer"
+        h2 {
+          inner = story[title];
         }
-        for page in visiblePages {
+        p {
+          inner = story[description];
+        }
+        if isWriter {
           a {
-            classs = "blocklink pageItem"
-            href = "/notebook/\(notebookID)/\(page.id)"
-            h3 {
-              inner = page.title
+            href = "/notebook/\(notebookID)/edit"
+            inner = "Edit"
+          }
+        }
+        div {
+          idd = "pageList"
+          if isWriter {
+            classs = "sortable"
+          }
+          for page in visiblePages {
+            a {
+              classs = "blocklink pageItem"
+              href = "/notebook/\(notebookID)/\(page.id)"
+              h3 {
+                inner = page.title
+              }
             }
           }
         }
-      }
-      if isWriter {
-        a {
-          classs = "blocklink"
-          href = "/notebook/\(notebookID)/new"
-          h3 {
-            inner = "New page"
+        if isWriter {
+          a {
+            classs = "blocklink"
+            href = "/notebook/\(notebookID)/new"
+            h3 {
+              inner = "New page"
+            }
           }
-        }
-        script {
-          src = "https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"
-        }
-        script {
-          inner = """
-            document.addEventListener('DOMContentLoaded', function() {
-              new Sortable(document.getElementById('pageList'), {
-                animation: 150,
-                draggable: '.pageItem',
-                onEnd: function() {
-                  const pageIds = Array.from(document.querySelectorAll('#pageList .pageItem'))
-                    .map(el => el.href.split('/').pop());
-                  fetch('/notebook/\(notebookID)/reorder', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pages: pageIds })
-                  });
-                }
+          script {
+            src = "https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"
+          }
+          script {
+            inner = """
+              document.addEventListener('DOMContentLoaded', function() {
+                new Sortable(document.getElementById('pageList'), {
+                  animation: 150,
+                  draggable: '.pageItem',
+                  onEnd: function() {
+                    const pageIds = Array.from(document.querySelectorAll('#pageList .pageItem'))
+                      .map(el => el.href.split('/').pop());
+                    fetch('/notebook/\(notebookID)/reorder', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ pages: pageIds })
+                    });
+                  }
+                });
               });
-            });
-          """
+            """
+          }
         }
       }
     } else {
-      h2 {
-        inner = story[title];
-      }
-      p {
-        inner = story[description];
-      }
-      h3 {
-        inner = "You do not have permission to view this story. Request?"
-      }
-      a {
-        inner = "Request permission"
+      div {
+        classs = "contentContainer"
+        h2 {
+          inner = story[title];
+        }
+        p {
+          inner = story[description];
+        }
+        h3 {
+          inner = "You do not have permission to view this story. Request?"
+        }
+        a {
+          inner = "Request permission"
+        }
       }
     }
    } catch {
