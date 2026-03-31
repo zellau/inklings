@@ -130,7 +130,26 @@ server["/"] = scopes {
      return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(newNotebookID)"], nil)
    }
 
-   server["/notebook/:notebook"] = { request in
+   server.POST["/save/:notebook"] = { request in
+     let notebookID = request.params[":notebook"] ?? ""
+     guard notebookExists(notebookID) else {
+       return HttpResponse.notFound()
+     }
+     
+     var formData = [String: String]()
+     for (key, value) in request.parseUrlencodedForm() {
+       formData[key] = value
+     }
+     
+     let title = formData["title"] ?? "Untitled"
+     let description = formData["description"] ?? ""
+     
+     saveNotebook(notebookID: notebookID, title: title, description: description)
+     
+     return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(notebookID)"], nil)
+   }
+
+      server["/notebook/:notebook"] = { request in
      let notebookParam = request.params[":notebook"] ?? ""
      
      // Handle /notebook/new specially
@@ -146,43 +165,7 @@ server["/"] = scopes {
            }
            body {
              makeHeader()
-             div {
-               idd = "newNotebookPage"
-               classs = "accountPage"
-               h2 {
-                 inner = "Create New Notebook"
-               }
-               form {
-                 action = "/notebook/create"
-                 method = "POST"
-                 div {
-                   classs = "form-group"
-                   input {
-                     type = "text"
-                     name = "title"
-                     idd = "title"
-                     placeholder = "Title"
-                     style = inputStyle
-                   }
-                 }
-                 div {
-                   classs = "form-group"
-                   style = "display: flex; align-items: flex-start;"
-                   textarea {
-                     name = "description"
-                     idd = "description"
-                     placeholder = "Give a description for your notebook"
-                     rows = "4"
-                     style = "width: 50%; \(inputStyle)"
-                   }
-                 }
-                 button {
-                   type = "submit"
-                   classs = "save-button"
-                   inner = "Create Notebook"
-                 }
-               }
-             }
+             notebookForm(notebookID: nil, existingTitle: nil, existingDescription: nil, inputStyle: inputStyle)
            }
          }
        }(request)
@@ -203,6 +186,48 @@ server["/"] = scopes {
         }
       }
      }(request)
+   }
+
+   server["/edit/:notebook"] = { request in
+     let notebookID = request.params[":notebook"] ?? ""
+     guard notebookExists(notebookID) else {
+       return HttpResponse.notFound()
+     }
+     
+     let userID = getCurrentUser(from: request) ?? 0
+     let userPrefs = getUserPreferences(forUser: userID)
+     let inputStyle = "font-family: \(userPrefs.font); color: \(userPrefs.color);"
+     
+     // Fetch existing notebook data
+     do {
+       let db = try Connection("inklings.sqlite3")
+       let storiesTable = Table("stories")
+       let idExpression = Expression<String>("id")
+       let titleExpression = Expression<String>("title")
+       let descriptionExpression = Expression<String>("description")
+       
+       let query = storiesTable.where(idExpression == notebookID)
+       guard let notebook = try db.pluck(query) else {
+         return HttpResponse.notFound()
+       }
+       
+       let existingTitle = notebook[titleExpression]
+       let existingDescription = notebook[descriptionExpression]
+       
+       return scopes {
+         html {
+           head {
+             addHead()
+           }
+           body {
+             makeHeader()
+             notebookForm(notebookID: notebookID, existingTitle: existingTitle, existingDescription: existingDescription, inputStyle: inputStyle)
+           }
+         }
+       }(request)
+     } catch {
+       return HttpResponse.notFound()
+     }
    }
 
    server["/notebook/:notebook/:page"] = { request in
@@ -1321,7 +1346,7 @@ func showNotebook(_ notebookID: String, toUser user: Int) {
         }
         if isWriter {
           a {
-            href = "/notebook/\(notebookID)/edit"
+            href = "/edit/\(notebookID)"
             inner = "Edit"
           }
         }
@@ -1394,6 +1419,53 @@ func showNotebook(_ notebookID: String, toUser user: Int) {
   }
 }
 
+func notebookForm(notebookID: String?, existingTitle: String?, existingDescription: String?, inputStyle: String) {
+    let isEdit = notebookID != nil
+    let pageTitle = isEdit ? "Edit Notebook" : "Create New Notebook"
+    let formAction = isEdit ? "/save/\(notebookID!)" : "/notebook/create"
+    let buttonText = isEdit ? "Save Changes" : "Create Notebook"
+    
+    div {
+        idd = isEdit ? "editNotebookPage" : "newNotebookPage"
+        classs = "accountPage"
+        h2 {
+            inner = pageTitle
+        }
+        form {
+            action = formAction
+            method = "POST"
+            div {
+                classs = "form-group"
+                input {
+                    type = "text"
+                    name = "title"
+                    idd = "title"
+                    placeholder = "Title"
+                    value = existingTitle ?? ""
+                    style = inputStyle
+                }
+            }
+            div {
+                classs = "form-group"
+                style = "display: flex; align-items: flex-start;"
+                textarea {
+                    name = "description"
+                    idd = "description"
+                    placeholder = "Give a description for your notebook"
+                    rows = "4"
+                    style = "width: 50%; \(inputStyle)"
+                    inner = existingDescription ?? ""
+                }
+            }
+            button {
+                type = "submit"
+                classs = "save-button"
+                inner = buttonText
+            }
+        }
+    }
+}
+
 func createNotebook(title: String, description: String, userID: Int) -> String {
     do {
         let db = try Connection("inklings.sqlite3")
@@ -1413,6 +1485,15 @@ func createNotebook(title: String, description: String, userID: Int) -> String {
     } catch {
         print("Error creating notebook: \(error)")
         return "error"
+    }
+}
+
+func saveNotebook(notebookID: String, title: String, description: String) {
+    do {
+        let db = try Connection("inklings.sqlite3")
+        try db.run("UPDATE stories SET title = ?, description = ? WHERE id = ?", title, description, notebookID)
+    } catch {
+        print("Error saving notebook: \(error)")
     }
 }
 
