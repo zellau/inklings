@@ -136,6 +136,11 @@ server["/"] = scopes {
        return HttpResponse.notFound()
      }
      
+     let userID = getCurrentUser(from: request) ?? 0
+     guard isWriter(userID: userID, notebookID: notebookID) else {
+       return HttpResponse.raw(403, "Forbidden", nil, nil)
+     }
+     
      var formData = [String: String]()
      for (key, value) in request.parseUrlencodedForm() {
        formData[key] = value
@@ -193,6 +198,12 @@ server["/"] = scopes {
      }
      
      let userID = getCurrentUser(from: request) ?? 0
+     
+     // Check writer permission
+     guard isWriter(userID: userID, notebookID: notebookID) else {
+       return HttpResponse.raw(403, "Forbidden", nil, nil)
+     }
+     
      let userPrefs = getUserPreferences(forUser: userID)
      let inputStyle = "font-family: \(userPrefs.font); color: \(userPrefs.color);"
      
@@ -2210,6 +2221,20 @@ func notebookExists(_ id: String) -> Bool {
         for row in stmt.bind(id) {
             if let count = row[0] as? Int64 {
                 return count > 0
+            }
+        }
+    } catch {}
+    return false
+}
+
+func isWriter(userID: Int, notebookID: String) -> Bool {
+    guard userID != 0 else { return false }
+    do {
+        let db = try Connection("inklings.sqlite3")
+        let stmt = try db.prepare("SELECT role FROM user_stories WHERE userID = ? AND notebookID = ?")
+        for row in stmt.bind(userID, notebookID) {
+            if let role = row[0] as? Int64 {
+                return role == Int64(Roles.writer.rawValue)
             }
         }
     } catch {}
