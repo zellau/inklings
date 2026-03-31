@@ -245,6 +245,9 @@ server["/"] = scopes {
        return HttpResponse.notFound()
      }
      let userID = getCurrentUser(from: request) ?? 0
+     guard isWriter(userID: userID, notebookID: notebookID) else {
+       return HttpResponse.raw(403, "Forbidden", nil, nil)
+     }
      return scopes {
        html {
          head {
@@ -288,6 +291,9 @@ server["/"] = scopes {
      guard notebookExists(notebookID) else {
        return HttpResponse.notFound()
      }
+     guard isWriter(userID: userID, notebookID: notebookID) else {
+       return HttpResponse.raw(403, "Forbidden", nil, nil)
+     }
      let pageID = request.params[":page"] ?? ""
      guard pageExists(pageID, inNotebook: notebookID) else {
        return HttpResponse.notFound()
@@ -310,11 +316,14 @@ server["/"] = scopes {
     guard notebookExists(notebookID) else {
       return HttpResponse.notFound()
     }
+    let userID = getCurrentUser(from: request) ?? 0
+    guard isWriter(userID: userID, notebookID: notebookID) else {
+      return HttpResponse.raw(403, "Forbidden", nil, nil)
+    }
     let pageID = request.params[":page"] ?? ""
     guard pageExists(pageID, inNotebook: notebookID) else {
       return HttpResponse.notFound()
     }
-    let userID = getCurrentUser(from: request)
     var formData = [String: String]();
     for (key,value) in request.parseUrlencodedForm() {
       formData[key] = value;
@@ -333,7 +342,10 @@ server.POST["/create/:notebook"] = { request in
     guard notebookExists(notebookID) else {
       return HttpResponse.notFound()
     }
-    let userID = getCurrentUser(from: request)
+    let userID = getCurrentUser(from: request) ?? 0
+    guard isWriter(userID: userID, notebookID: notebookID) else {
+      return HttpResponse.raw(403, "Forbidden", nil, nil)
+    }
     var formData = [String: String]();
     for (key,value) in request.parseUrlencodedForm() {
       formData[key] = value;
@@ -351,6 +363,10 @@ server.POST["/notebook/:notebook/reorder"] = { request in
     let notebookID = request.params[":notebook"] ?? ""
     guard notebookExists(notebookID) else {
       return HttpResponse.notFound()
+    }
+    let userID = getCurrentUser(from: request) ?? 0
+    guard isWriter(userID: userID, notebookID: notebookID) else {
+      return HttpResponse.raw(403, "Forbidden", nil, nil)
     }
     
     // Parse JSON body
