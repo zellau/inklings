@@ -149,28 +149,26 @@ server["/"] = scopes {
      return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(notebookID)"], nil)
    }
 
-      server["/notebook/:notebook"] = { request in
-     let notebookParam = request.params[":notebook"] ?? ""
+   server["/new"] = { request in
+     let userID = getCurrentUser(from: request) ?? 0
+     let userPrefs = getUserPreferences(forUser: userID)
+     let inputStyle = "font-family: \(userPrefs.font); color: \(userPrefs.color);"
      
-     // Handle /notebook/new specially
-     if notebookParam == "new" {
-       let userID = getCurrentUser(from: request) ?? 0
-       let userPrefs = getUserPreferences(forUser: userID)
-       let inputStyle = "font-family: \(userPrefs.font); color: \(userPrefs.color);"
-       
-       return scopes {
-         html {
-           head {
-             addHead()
-           }
-           body {
-             makeHeader()
-             notebookForm(notebookID: nil, existingTitle: nil, existingDescription: nil, inputStyle: inputStyle)
-           }
+     return scopes {
+       html {
+         head {
+           addHead()
          }
-       }(request)
-     }
-     
+         body {
+           makeHeader()
+           notebookForm(notebookID: nil, existingTitle: nil, existingDescription: nil, inputStyle: inputStyle)
+         }
+       }
+     }(request)
+   }
+
+   server["/notebook/:notebook"] = { request in
+     let notebookParam = request.params[":notebook"] ?? ""
      guard notebookExists(notebookParam) else {
        return HttpResponse.notFound()
      }
@@ -230,6 +228,25 @@ server["/"] = scopes {
      }
    }
 
+   server["/new/:notebook"] = { request in
+     let notebookID = request.params[":notebook"] ?? ""
+     guard notebookExists(notebookID) else {
+       return HttpResponse.notFound()
+     }
+     let userID = getCurrentUser(from: request) ?? 0
+     return scopes {
+       html {
+         head {
+           addHead()
+         }
+         body {
+           makeHeader()
+           editPage(nil, inNotebook: notebookID, forUser: userID)
+         }
+       }
+     }(request)
+   }
+
    server["/notebook/:notebook/:page"] = { request in
      let notebookID = request.params[":notebook"] ?? ""
      guard notebookExists(notebookID) else {
@@ -237,25 +254,6 @@ server["/"] = scopes {
      }
 
      let pageID = request.params[":page"] ?? ""
-     
-     // Handle /notebook/:notebook/new specially
-     if pageID == "new" {
-      let userID = getCurrentUser(from: request) ?? 0
-      let userPrefs = getUserPreferences(forUser: userID)
-
-      return scopes {
-        html {
-          head {
-            addHead();
-          }
-          body {
-            makeHeader();
-            editPage(nil, inNotebook: notebookID, forUser: userID);
-          }
-      }
-     }(request)
-     }
-
      guard pageExists(pageID, inNotebook: notebookID) else {
        return HttpResponse.notFound()
      }
@@ -1278,7 +1276,7 @@ func showNotebooks(forUser user: Int) {
     }
     a {
       classs = "blocklink"
-      href = "/notebook/new"
+      href = "/new"
       h2 {
         inner = "New notebook"
       }
@@ -1368,7 +1366,7 @@ func showNotebook(_ notebookID: String, toUser user: Int) {
         if isWriter {
           a {
             classs = "blocklink"
-            href = "/notebook/\(notebookID)/new"
+            href = "/new/\(notebookID)"
             h3 {
               inner = "New page"
             }
