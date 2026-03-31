@@ -115,7 +115,7 @@ server["/"] = scopes {
   }
 
    // Handle notebook creation
-   server.POST["/notebook/create"] = { request in
+   server.POST["/create"] = { request in
      var formData = [String: String]()
      for (key, value) in request.parseUrlencodedForm() {
        formData[key] = value
@@ -317,7 +317,7 @@ server["/"] = scopes {
     return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(notebookID)/\(pageID)"], nil)
   }
 
-server.POST["/notebook/:notebook/page/create"] = { request in
+server.POST["/create/:notebook"] = { request in
     let notebookID = request.params[":notebook"] ?? ""
     guard notebookExists(notebookID) else {
       return HttpResponse.notFound()
@@ -1021,7 +1021,7 @@ func editPage(_ pageID: String?, inNotebook notebookID: String, forUser userID: 
     var currentTitle = ""
     var currentBody = ""
     var currentPublished = 1  // Default to "authors only"
-    var formAction = "/notebook/\(notebookID)/page/create"
+    var formAction = "/create/\(notebookID)"
     
     if let existingID = pageID {
       // Editing existing page - load its content
@@ -1420,7 +1420,7 @@ func showNotebook(_ notebookID: String, toUser user: Int) {
 func notebookForm(notebookID: String?, existingTitle: String?, existingDescription: String?, inputStyle: String) {
     let isEdit = notebookID != nil
     let pageTitle = isEdit ? "Edit Notebook" : "Create New Notebook"
-    let formAction = isEdit ? "/save/\(notebookID!)" : "/notebook/create"
+    let formAction = isEdit ? "/save/\(notebookID!)" : "/create"
     let buttonText = isEdit ? "Save Changes" : "Create Notebook"
     
     div {
