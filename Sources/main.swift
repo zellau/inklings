@@ -271,7 +271,7 @@ server["/"] = scopes {
      }(request)
    }
 
-   server["/notebook/:notebook/:page/edit"] = { request in
+   server["/edit/:notebook/:page"] = { request in
      let userID = getCurrentUser(from: request) ?? 0
      let notebookID = request.params[":notebook"] ?? ""
      guard notebookExists(notebookID) else {
@@ -294,7 +294,7 @@ server["/"] = scopes {
      }(request)
    }
 
-  server.POST["/notebook/:notebook/:page/save"] = { request in
+  server.POST["/save/:notebook/:page"] = { request in
     let notebookID = request.params[":notebook"] ?? ""
     guard notebookExists(notebookID) else {
       return HttpResponse.notFound()
@@ -712,7 +712,7 @@ func showPage(_ pageID: String, inNotebook notebookID: String, toUser user: Int)
                 }
               }
               a {
-                href = "/notebook/\(notebookID)/\(pageID)/edit"
+                href = "/edit/\(notebookID)/\(pageID)"
                 inner = "Edit"
               }
             }
@@ -1030,7 +1030,7 @@ func editPage(_ pageID: String?, inNotebook notebookID: String, forUser userID: 
         currentTitle = page[titleExpression]
         currentBody = page[bodyExpression]
         currentPublished = page[publishedExpression] ?? 1
-        formAction = "/notebook/\(notebookID)/\(existingID)/save"
+        formAction = "/save/\(notebookID)/\(existingID)"
       }
     }
     // If pageID is nil, we're creating a new page - leave title/body empty
