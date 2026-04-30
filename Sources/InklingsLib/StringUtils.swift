@@ -240,3 +240,80 @@ public func renderBodyWithInlineComments(_ bodyUnformatted: String, comments: [C
     
     return result
 }
+
+// MARK: - Streak Calculation
+
+public struct StreakDay {
+    public let date: String  // YYYY-MM-DD
+    public let goalMet: Bool
+    
+    public init(date: String, goalMet: Bool) {
+        self.date = date
+        self.goalMet = goalMet
+    }
+}
+
+/// Calculate the current streak from history.
+/// - Parameters:
+///   - history: Days with writing activity, ordered by date DESC (most recent first)
+///   - today: The current date in YYYY-MM-DD format
+/// - Returns: The current streak count
+public func calculateStreak(
+    history: [StreakDay],
+    today: String
+) -> Int {
+    guard !history.isEmpty else { return 0 }
+    
+    var streak = 0
+    var expectedDate = today
+    
+    for day in history {
+        if day.date == expectedDate {
+            // This is the date we expected
+            if day.goalMet {
+                streak += 1
+                expectedDate = previousDay(expectedDate)
+            } else {
+                // Wrote but didn't meet goal - streak broken
+                break
+            }
+        } else if day.date < expectedDate {
+            // Gap - streak broken
+            break
+        }
+        // If day.date > expectedDate, skip it (future date or duplicate)
+    }
+    
+    return streak
+}
+
+/// Get the previous day in YYYY-MM-DD format
+public func previousDay(_ dateString: String) -> String {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "yyyy-MM-dd"
+    formatter.timeZone = TimeZone(identifier: "UTC")
+    
+    guard let date = formatter.date(from: dateString) else {
+        return dateString
+    }
+    
+    let previous = Calendar(identifier: .gregorian).date(byAdding: .day, value: -1, to: date)!
+    return formatter.string(from: previous)
+}
+
+/// Calculate the number of days between two dates (exclusive of start, inclusive of end)
+/// Returns 0 if dates are adjacent, 1 if there's one day gap, etc.
+public func daysBetween(from earlier: String, to later: String) -> Int {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "yyyy-MM-dd"
+    formatter.timeZone = TimeZone(identifier: "UTC")
+    
+    guard let date1 = formatter.date(from: earlier),
+          let date2 = formatter.date(from: later) else {
+        return 0
+    }
+    
+    let calendar = Calendar(identifier: .gregorian)
+    let components = calendar.dateComponents([.day], from: date1, to: date2)
+    return max(0, (components.day ?? 0) - 1)
+}
