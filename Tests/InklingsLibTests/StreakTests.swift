@@ -101,3 +101,39 @@ func previousDay(_ dateString: String, daysBack: Int) -> String {
     }
     return result
 }
+
+final class WordCountTests: XCTestCase {
+    
+    func testCountWordsSimple() {
+        XCTAssertEqual(countWords("hello world"), 2)
+    }
+    
+    func testCountWordsEmpty() {
+        XCTAssertEqual(countWords(""), 0)
+    }
+    
+    func testCountWordsMultipleSpaces() {
+        XCTAssertEqual(countWords("hello   world"), 2)
+    }
+    
+    func testCountWordsNewlines() {
+        XCTAssertEqual(countWords("hello\nworld\nfoo"), 3)
+    }
+    
+    func testCountWordsMixedWhitespace() {
+        XCTAssertEqual(countWords("hello\t\n  world"), 2)
+    }
+    
+    func testCountWordsOnlyWhitespace() {
+        XCTAssertEqual(countWords("   \n\t  "), 0)
+    }
+    
+    func testCountWordsParagraphs() {
+        let text = """
+        This is paragraph one.
+        
+        This is paragraph two with more words.
+        """
+        XCTAssertEqual(countWords(text), 11)
+    }
+}

@@ -317,3 +317,10 @@ public func daysBetween(from earlier: String, to later: String) -> Int {
     let components = calendar.dateComponents([.day], from: date1, to: date2)
     return max(0, (components.day ?? 0) - 1)
 }
+
+// MARK: - Word Counting
+
+/// Count words in a text string
+public func countWords(_ text: String) -> Int {
+    text.split { $0.isWhitespace }.count
+}
