@@ -1070,11 +1070,18 @@ func editPage(_ pageID: String?, inNotebook notebookID: String, forUser userID: 
       "All inklings",
       "Anyone"
     ]
+    
+    let currentWordCount = countWords(currentBody)
 
     form {
       action = formAction
       method = "POST"
       style = "margin-top: 5px;"
+      input {
+        type = "hidden"
+        name = "oldWordCount"
+        value = "\(currentWordCount)"
+      }
       input {
         name = "title"
         type = "text"
@@ -1122,6 +1129,21 @@ func editPage(_ pageID: String?, inNotebook notebookID: String, forUser userID: 
         style = inputStyle
       }
       br {}
+      div {
+        classs = "word-count-control"
+        style = "margin: 10px 0;"
+        input {
+          type = "checkbox"
+          name = "countWords"
+          idd = "countWords"
+          value = "1"
+          checked = "checked"
+        }
+        label {
+          forr = "countWords"
+          inner = " Count words toward writing streak"
+        }
+      }
       button {
         type = "submit"
         classs = "save-button"
