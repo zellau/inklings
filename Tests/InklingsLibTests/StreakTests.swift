@@ -102,6 +102,58 @@ func previousDay(_ dateString: String, daysBack: Int) -> String {
     return result
 }
 
+final class UserTodayTests: XCTestCase {
+    
+    func makeDate(year: Int, month: Int, day: Int, hour: Int) -> Date {
+        var components = DateComponents()
+        components.year = year
+        components.month = month
+        components.day = day
+        components.hour = hour
+        components.minute = 0
+        components.second = 0
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        return calendar.date(from: components)!
+    }
+    
+    func testDayStartMidnight_afternoon() {
+        // Day starts at midnight, it's 3pm -> today
+        let now = makeDate(year: 2024, month: 3, day: 15, hour: 15)
+        XCTAssertEqual(userToday(dayStartHour: 0, now: now), "2024-03-15")
+    }
+    
+    func testDayStartMidnight_justAfter() {
+        // Day starts at midnight, it's 1am -> today
+        let now = makeDate(year: 2024, month: 3, day: 15, hour: 1)
+        XCTAssertEqual(userToday(dayStartHour: 0, now: now), "2024-03-15")
+    }
+    
+    func testDayStart3am_at2am() {
+        // Day starts at 3am, it's 2am -> still yesterday
+        let now = makeDate(year: 2024, month: 3, day: 15, hour: 2)
+        XCTAssertEqual(userToday(dayStartHour: 3, now: now), "2024-03-14")
+    }
+    
+    func testDayStart3am_at3am() {
+        // Day starts at 3am, it's 3am -> today
+        let now = makeDate(year: 2024, month: 3, day: 15, hour: 3)
+        XCTAssertEqual(userToday(dayStartHour: 3, now: now), "2024-03-15")
+    }
+    
+    func testDayStart3am_at4am() {
+        // Day starts at 3am, it's 4am -> today
+        let now = makeDate(year: 2024, month: 3, day: 15, hour: 4)
+        XCTAssertEqual(userToday(dayStartHour: 3, now: now), "2024-03-15")
+    }
+    
+    func testDayStart3am_yearBoundary() {
+        // Day starts at 3am, it's 2am on Jan 1 -> still Dec 31 of previous year
+        let now = makeDate(year: 2024, month: 1, day: 1, hour: 2)
+        XCTAssertEqual(userToday(dayStartHour: 3, now: now), "2023-12-31")
+    }
+}
+
 final class WordCountTests: XCTestCase {
     
     func testCountWordsSimple() {

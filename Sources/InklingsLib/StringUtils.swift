@@ -324,3 +324,28 @@ public func daysBetween(from earlier: String, to later: String) -> Int {
 public func countWords(_ text: String) -> Int {
     text.split { $0.isWhitespace }.count
 }
+
+/// Compute the user's "today" based on their day start hour.
+/// If current hour < dayStartHour, it's still "yesterday".
+/// - Parameters:
+///   - dayStartHour: Hour (0-23) when the user's day starts
+///   - now: Current date/time (injectable for testing)
+/// - Returns: Date string in YYYY-MM-DD format
+public func userToday(dayStartHour: Int, now: Date = Date()) -> String {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "UTC")!
+    
+    let hour = calendar.component(.hour, from: now)
+    
+    var effectiveDate = now
+    if hour < dayStartHour {
+        // It's before the user's day starts, so it's still "yesterday"
+        effectiveDate = calendar.date(byAdding: .day, value: -1, to: now)!
+    }
+    
+    let formatter = DateFormatter()
+    formatter.dateFormat = "yyyy-MM-dd"
+    formatter.timeZone = TimeZone(identifier: "UTC")
+    
+    return formatter.string(from: effectiveDate)
+}
