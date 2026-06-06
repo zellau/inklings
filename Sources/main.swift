@@ -331,8 +331,16 @@ server["/"] = scopes {
     let title = formData["title"]!;
     let textBody = formData["body"]!;
     let published = Int(formData["published"] ?? "1") ?? 1;
+    let oldWordCount = Int(formData["oldWordCount"] ?? "0") ?? 0
+    let shouldCountWords = formData["countWords"] == "1"
 
     savePage(pageID, inNotebook: notebookID, title: title, textBody: textBody, published: published, savedBy: userID);
+
+    if shouldCountWords {
+        let newWordCount = countWords(textBody)
+        let delta = max(0, newWordCount - oldWordCount)
+        recordWords(userID: userID, notebookID: notebookID, words: delta)
+    }
 
     return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(notebookID)/\(pageID)"], nil)
   }
@@ -353,8 +361,14 @@ server.POST["/create/:notebook"] = { request in
     let title = formData["title"]!;
     let textBody = formData["body"]!;
     let published = Int(formData["published"] ?? "1") ?? 1;
+    let shouldCountWords = formData["countWords"] == "1"
 
     let newPageID = createPage(inNotebook: notebookID, title: title, textBody: textBody, published: published, createdBy: userID);
+
+    if shouldCountWords {
+        let wordCount = countWords(textBody)
+        recordWords(userID: userID, notebookID: notebookID, words: wordCount)
+    }
 
     return HttpResponse.raw(303, "See Other", ["Location": "/notebook/\(notebookID)/\(newPageID)"], nil)
   }
