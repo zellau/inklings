@@ -2105,6 +2105,62 @@ func saveUserPreferences(userID: Int, color: String, font: String) {
     }
 }
 
+// MARK: - Word Count Tracking
+
+func getUserDayStartHour(userID: Int) -> Int {
+    do {
+        let db = try Connection("inklings.sqlite3")
+        for row in try db.prepare("SELECT dayStartHour FROM users WHERE userID = ?", userID) {
+            return row[0] as? Int ?? 0
+        }
+    } catch {
+        print("Error getting day start hour: \(error)")
+    }
+    return 0
+}
+
+func getNotebookWordGoal(userID: Int, notebookID: String) -> Int {
+    do {
+        let db = try Connection("inklings.sqlite3")
+        for row in try db.prepare("SELECT dailyWordGoal FROM user_stories WHERE userID = ? AND notebookID = ?", userID, notebookID) {
+            return row[0] as? Int ?? 200
+        }
+    } catch {
+        print("Error getting notebook word goal: \(error)")
+    }
+    return 200
+}
+
+func recordWords(userID: Int, notebookID: String, words: Int) {
+    guard words > 0 else { return }
+    
+    do {
+        let db = try Connection("inklings.sqlite3")
+        let dayStartHour = getUserDayStartHour(userID: userID)
+        let today = userToday(dayStartHour: dayStartHour)
+        let goal = getNotebookWordGoal(userID: userID, notebookID: notebookID)
+        
+        // Try to update existing row
+        try db.run("""
+            UPDATE writing_streaks 
+            SET wordsAdded = wordsAdded + ?, 
+                goalMet = CASE WHEN wordsAdded + ? >= ? THEN 1 ELSE goalMet END
+            WHERE userID = ? AND notebookID = ? AND streakDate = ?
+            """, words, words, goal, userID, notebookID, today)
+        
+        // If no row was updated, insert a new one
+        if db.changes == 0 {
+            let goalMet = words >= goal ? 1 : 0
+            try db.run("""
+                INSERT INTO writing_streaks (userID, notebookID, streakDate, wordsAdded, goalMet)
+                VALUES (?, ?, ?, ?, ?)
+                """, userID, notebookID, today, words, goalMet)
+        }
+    } catch {
+        print("Error recording words: \(error)")
+    }
+}
+
 func saveCustomFont(userID: Int, fontName: String, fileName: String) {
     do {
         let db = try Connection("inklings.sqlite3")
