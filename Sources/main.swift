@@ -2110,6 +2110,21 @@ func getUserInfo(forUser userID: Int) -> (name: String, color: String, font: Str
     return (name: "User", color: "#333333", font: "Handwriting")
 }
 
+func getUserStreakSettings(forUser userID: Int) -> (dailyWordGoal: Int, dayStartHour: Int) {
+    do {
+        let db = try Connection("inklings.sqlite3")
+        let stmt = try db.prepare("SELECT dailyWordGoal, dayStartHour FROM users WHERE userID = ?", userID)
+        for row in stmt {
+            let goal = row[0] as? Int64 ?? 200
+            let hour = row[1] as? Int64 ?? 0
+            return (dailyWordGoal: Int(goal), dayStartHour: Int(hour))
+        }
+    } catch {
+        // log error
+    }
+    return (dailyWordGoal: 200, dayStartHour: 0)
+}
+
 func saveUserPreferences(userID: Int, color: String, font: String) {
     do {
         let db = try Connection("inklings.sqlite3")
