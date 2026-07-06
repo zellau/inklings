@@ -189,3 +189,32 @@ final class WordCountTests: XCTestCase {
         XCTAssertEqual(countWords(text), 11)
     }
 }
+
+final class HourLabelTests: XCTestCase {
+    
+    func testNow() {
+        XCTAssertEqual(hourLabel(hour: 3, currentHour: 3), "3 AM (now)")
+        XCTAssertEqual(hourLabel(hour: 0, currentHour: 0), "Midnight (now)")
+        XCTAssertEqual(hourLabel(hour: 12, currentHour: 12), "Noon (now)")
+    }
+    
+    func testInOneHour() {
+        XCTAssertEqual(hourLabel(hour: 4, currentHour: 3), "4 AM (in 1 hour)")
+        XCTAssertEqual(hourLabel(hour: 0, currentHour: 23), "Midnight (in 1 hour)")
+    }
+    
+    func testMultipleHours() {
+        XCTAssertEqual(hourLabel(hour: 8, currentHour: 3), "8 AM (in 5 hours)")
+        XCTAssertEqual(hourLabel(hour: 15, currentHour: 10), "3 PM (in 5 hours)")
+    }
+    
+    func testWrapAround() {
+        // Current hour is 22 (10 PM), asking about 3 AM
+        XCTAssertEqual(hourLabel(hour: 3, currentHour: 22), "3 AM (in 5 hours)")
+    }
+    
+    func testMidnightAndNoon() {
+        XCTAssertEqual(hourLabel(hour: 0, currentHour: 20), "Midnight (in 4 hours)")
+        XCTAssertEqual(hourLabel(hour: 12, currentHour: 8), "Noon (in 4 hours)")
+    }
+}

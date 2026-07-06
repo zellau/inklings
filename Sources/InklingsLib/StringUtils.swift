@@ -349,3 +349,28 @@ public func userToday(dayStartHour: Int, now: Date = Date()) -> String {
     
     return formatter.string(from: effectiveDate)
 }
+
+/// Generate a label for an hour option showing relative time
+/// - Parameters:
+///   - hour: The hour (0-23) to generate a label for
+///   - currentHour: The current hour (0-23), already rounded to nearest
+/// - Returns: Label like "3 AM (in 5 hours)" or "Midnight (now)"
+public func hourLabel(hour: Int, currentHour: Int) -> String {
+    let hourNames = [
+        "Midnight", "1 AM", "2 AM", "3 AM", "4 AM", "5 AM",
+        "6 AM", "7 AM", "8 AM", "9 AM", "10 AM", "11 AM",
+        "Noon", "1 PM", "2 PM", "3 PM", "4 PM", "5 PM",
+        "6 PM", "7 PM", "8 PM", "9 PM", "10 PM", "11 PM"
+    ]
+    
+    let hoursUntil = (hour - currentHour + 24) % 24
+    let name = hourNames[hour]
+    
+    if hoursUntil == 0 {
+        return "\(name) (now)"
+    } else if hoursUntil == 1 {
+        return "\(name) (in 1 hour)"
+    } else {
+        return "\(name) (in \(hoursUntil) hours)"
+    }
+}

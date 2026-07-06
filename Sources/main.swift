@@ -445,8 +445,10 @@ server.POST["/account/save"] = { request in
     
     let color = formData["color"] ?? "#333333"
     let font = formData["font"] ?? "Handwriting"
+    let dailyWordGoal = Int(formData["dailyWordGoal"] ?? "200") ?? 200
+    let dayStartHour = Int(formData["dayStartHour"] ?? "0") ?? 0
     
-    saveUserPreferences(userID: userID, color: color, font: font)
+    saveUserPreferences(userID: userID, color: color, font: font, dailyWordGoal: dailyWordGoal, dayStartHour: dayStartHour)
     
     return HttpResponse.raw(303, "See Other", ["Location": "/account?message=Preferences+saved!"], nil)
 }
@@ -1854,6 +1856,7 @@ func showAccountPage(forUser userID: Int, message: String? = nil) {
     let currentFont = userInfo.font
     let userName = userInfo.name
     let customFonts = getCustomFonts(forUser: userID)
+    let streakSettings = getUserStreakSettings(forUser: userID)
     
     div {
         idd = "accountPage"
@@ -1956,6 +1959,54 @@ func showAccountPage(forUser userID: Int, message: String? = nil) {
                                 selected = "selected"
                             }
                             inner = "\(customFont.fontName) (custom)"
+                        }
+                    }
+                }
+            }
+            
+            h3 { inner = "Writing Streak Settings" }
+            
+            // Daily word goal
+            div {
+                classs = "form-group"
+                label {
+                    forr = "dailyWordGoal"
+                    inner = "Daily Word Goal:"
+                }
+                input {
+                    type = "number"
+                    name = "dailyWordGoal"
+                    idd = "dailyWordGoal"
+                    value = "\(streakSettings.dailyWordGoal)"
+                }
+            }
+            
+            // Day start hour
+            div {
+                classs = "form-group"
+                label {
+                    forr = "dayStartHour"
+                    inner = "Day Starts At (UTC):"
+                }
+                select {
+                    name = "dayStartHour"
+                    idd = "dayStartHour"
+                    
+                    // Get current hour (rounded to nearest)
+                    var calendar = Calendar(identifier: .gregorian)
+                    calendar.timeZone = TimeZone(identifier: "UTC")!
+                    let now = Date()
+                    let currentHourRaw = calendar.component(.hour, from: now)
+                    let currentMinute = calendar.component(.minute, from: now)
+                    let roundedHour = (currentMinute >= 30) ? (currentHourRaw + 1) % 24 : currentHourRaw
+                    
+                    for hour in 0..<24 {
+                        option {
+                            value = "\(hour)"
+                            if hour == streakSettings.dayStartHour {
+                                selected = "selected"
+                            }
+                            inner = hourLabel(hour: hour, currentHour: roundedHour)
                         }
                     }
                 }
@@ -2125,10 +2176,10 @@ func getUserStreakSettings(forUser userID: Int) -> (dailyWordGoal: Int, dayStart
     return (dailyWordGoal: 200, dayStartHour: 0)
 }
 
-func saveUserPreferences(userID: Int, color: String, font: String) {
+func saveUserPreferences(userID: Int, color: String, font: String, dailyWordGoal: Int, dayStartHour: Int) {
     do {
         let db = try Connection("inklings.sqlite3")
-        try db.run("UPDATE users SET preferredColor = ?, preferredFont = ? WHERE userID = ?", color, font, userID)
+        try db.run("UPDATE users SET preferredColor = ?, preferredFont = ?, dailyWordGoal = ?, dayStartHour = ? WHERE userID = ?", color, font, dailyWordGoal, dayStartHour, userID)
     } catch {
         // log error
     }
