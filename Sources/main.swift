@@ -338,7 +338,7 @@ server["/"] = scopes {
 
     if shouldCountWords {
         let newWordCount = countWords(textBody)
-        let delta = max(0, newWordCount - oldWordCount)
+        let delta = wordDelta(oldCount: oldWordCount, newCount: newWordCount)
         recordWords(userID: userID, notebookID: notebookID, words: delta)
     }
 

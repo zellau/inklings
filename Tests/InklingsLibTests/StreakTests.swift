@@ -75,6 +75,75 @@ final class StreakTests: XCTestCase {
         XCTAssertEqual(result, 100)
     }
     
+    // MARK: - Edge Cases
+    
+    func testFutureDateInHistory() {
+        // Future dates should be skipped
+        let history = [
+            StreakDay(date: "2024-04-01", goalMet: true),  // Future
+            StreakDay(date: "2024-03-30", goalMet: true),  // Today
+            StreakDay(date: "2024-03-29", goalMet: true)
+        ]
+        let result = calculateStreak(history: history, today: "2024-03-30")
+        XCTAssertEqual(result, 2)
+    }
+    
+    func testStreakBrokenByMultiDayGap() {
+        // 3-day gap should break streak
+        let history = [
+            StreakDay(date: "2024-03-30", goalMet: true),
+            StreakDay(date: "2024-03-26", goalMet: true)  // 3-day gap
+        ]
+        let result = calculateStreak(history: history, today: "2024-03-30")
+        XCTAssertEqual(result, 1)
+    }
+    
+    func testWroteButDidntMeetGoalToday() {
+        // Wrote today but didn't meet goal -> streak is 0
+        let history = [
+            StreakDay(date: "2024-03-30", goalMet: false),
+            StreakDay(date: "2024-03-29", goalMet: true),
+            StreakDay(date: "2024-03-28", goalMet: true)
+        ]
+        let result = calculateStreak(history: history, today: "2024-03-30")
+        XCTAssertEqual(result, 0)
+    }
+    
+    func testStreakContinuesFromYesterday() {
+        // Haven't written today yet, but yesterday met goal
+        // This returns 0 because there's a gap from today
+        let history = [
+            StreakDay(date: "2024-03-29", goalMet: true),
+            StreakDay(date: "2024-03-28", goalMet: true)
+        ]
+        let result = calculateStreak(history: history, today: "2024-03-30")
+        XCTAssertEqual(result, 0)
+    }
+    
+    func testMonthTransition() {
+        // Streak across month boundary
+        let history = [
+            StreakDay(date: "2024-04-02", goalMet: true),
+            StreakDay(date: "2024-04-01", goalMet: true),
+            StreakDay(date: "2024-03-31", goalMet: true),
+            StreakDay(date: "2024-03-30", goalMet: true)
+        ]
+        let result = calculateStreak(history: history, today: "2024-04-02")
+        XCTAssertEqual(result, 4)
+    }
+    
+    func testYearTransition() {
+        // Streak across year boundary
+        let history = [
+            StreakDay(date: "2024-01-02", goalMet: true),
+            StreakDay(date: "2024-01-01", goalMet: true),
+            StreakDay(date: "2023-12-31", goalMet: true),
+            StreakDay(date: "2023-12-30", goalMet: true)
+        ]
+        let result = calculateStreak(history: history, today: "2024-01-02")
+        XCTAssertEqual(result, 4)
+    }
+    
     // MARK: - Helper Function Tests
     
     func testPreviousDay() {
@@ -152,6 +221,42 @@ final class UserTodayTests: XCTestCase {
         let now = makeDate(year: 2024, month: 1, day: 1, hour: 2)
         XCTAssertEqual(userToday(dayStartHour: 3, now: now), "2023-12-31")
     }
+    
+    func testDayStartMidnight_at23() {
+        // Day starts at midnight, it's 11pm -> today (not tomorrow)
+        let now = makeDate(year: 2024, month: 3, day: 15, hour: 23)
+        XCTAssertEqual(userToday(dayStartHour: 0, now: now), "2024-03-15")
+    }
+    
+    func testDayStart4am_atMidnight() {
+        // Day starts at 4am, it's midnight -> still yesterday
+        let now = makeDate(year: 2024, month: 3, day: 15, hour: 0)
+        XCTAssertEqual(userToday(dayStartHour: 4, now: now), "2024-03-14")
+    }
+    
+    func testDayStart23_at22() {
+        // Edge case: day starts at 11pm, it's 10pm -> still yesterday
+        let now = makeDate(year: 2024, month: 3, day: 15, hour: 22)
+        XCTAssertEqual(userToday(dayStartHour: 23, now: now), "2024-03-14")
+    }
+    
+    func testDayStart23_at23() {
+        // Edge case: day starts at 11pm, it's 11pm -> today
+        let now = makeDate(year: 2024, month: 3, day: 15, hour: 23)
+        XCTAssertEqual(userToday(dayStartHour: 23, now: now), "2024-03-15")
+    }
+    
+    func testLeapYearTransition() {
+        // Feb 29 2024 at 2am with day start at 3am -> Feb 28
+        let now = makeDate(year: 2024, month: 2, day: 29, hour: 2)
+        XCTAssertEqual(userToday(dayStartHour: 3, now: now), "2024-02-28")
+    }
+    
+    func testMonthBoundary() {
+        // April 1 at 2am with day start at 3am -> March 31
+        let now = makeDate(year: 2024, month: 4, day: 1, hour: 2)
+        XCTAssertEqual(userToday(dayStartHour: 3, now: now), "2024-03-31")
+    }
 }
 
 final class WordCountTests: XCTestCase {
@@ -188,6 +293,63 @@ final class WordCountTests: XCTestCase {
         """
         XCTAssertEqual(countWords(text), 11)
     }
+    
+    func testCountWordsPunctuation() {
+        // Punctuation attached to words doesn't split them
+        XCTAssertEqual(countWords("Hello, world!"), 2)
+        XCTAssertEqual(countWords("Wait... what?"), 2)
+    }
+    
+    func testCountWordsContractions() {
+        // Contractions count as one word
+        XCTAssertEqual(countWords("don't can't won't"), 3)
+    }
+    
+    func testCountWordsHyphenated() {
+        // Hyphenated words count as one word
+        XCTAssertEqual(countWords("well-known self-aware"), 2)
+    }
+    
+    func testCountWordsUnicode() {
+        // Unicode letters are words too
+        XCTAssertEqual(countWords("café naïve résumé"), 3)
+        XCTAssertEqual(countWords("日本語 中文"), 2)
+    }
+    
+    func testCountWordsEmoji() {
+        // Emoji separated by spaces count as words
+        XCTAssertEqual(countWords("🎉 hello 🌍"), 3)
+    }
+    
+    func testCountWordsNumbers() {
+        XCTAssertEqual(countWords("123 456 789"), 3)
+        XCTAssertEqual(countWords("Chapter 1 Page 42"), 4)
+    }
+}
+
+final class WordDeltaTests: XCTestCase {
+    
+    func testWordsAdded() {
+        XCTAssertEqual(wordDelta(oldCount: 100, newCount: 150), 50)
+    }
+    
+    func testWordsDeleted() {
+        // Deletions don't subtract from streak
+        XCTAssertEqual(wordDelta(oldCount: 100, newCount: 80), 0)
+    }
+    
+    func testNoChange() {
+        XCTAssertEqual(wordDelta(oldCount: 100, newCount: 100), 0)
+    }
+    
+    func testFromZero() {
+        XCTAssertEqual(wordDelta(oldCount: 0, newCount: 200), 200)
+    }
+    
+    func testToZero() {
+        // Clearing all text doesn't subtract
+        XCTAssertEqual(wordDelta(oldCount: 500, newCount: 0), 0)
+    }
 }
 
 final class HourLabelTests: XCTestCase {
@@ -216,5 +378,24 @@ final class HourLabelTests: XCTestCase {
     func testMidnightAndNoon() {
         XCTAssertEqual(hourLabel(hour: 0, currentHour: 20), "Midnight (in 4 hours)")
         XCTAssertEqual(hourLabel(hour: 12, currentHour: 8), "Noon (in 4 hours)")
+    }
+    
+    func testAllHourNames() {
+        // Verify AM/PM naming
+        XCTAssertEqual(hourLabel(hour: 1, currentHour: 1), "1 AM (now)")
+        XCTAssertEqual(hourLabel(hour: 11, currentHour: 11), "11 AM (now)")
+        XCTAssertEqual(hourLabel(hour: 13, currentHour: 13), "1 PM (now)")
+        XCTAssertEqual(hourLabel(hour: 23, currentHour: 23), "11 PM (now)")
+    }
+    
+    func testMaxHoursAway() {
+        // 23 hours away (max possible)
+        XCTAssertEqual(hourLabel(hour: 22, currentHour: 23), "10 PM (in 23 hours)")
+    }
+    
+    func testWrapAroundMidnight() {
+        // Going from PM to AM
+        XCTAssertEqual(hourLabel(hour: 1, currentHour: 23), "1 AM (in 2 hours)")
+        XCTAssertEqual(hourLabel(hour: 6, currentHour: 22), "6 AM (in 8 hours)")
     }
 }

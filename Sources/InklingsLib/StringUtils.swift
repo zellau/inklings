@@ -325,6 +325,16 @@ public func countWords(_ text: String) -> Int {
     text.split { $0.isWhitespace }.count
 }
 
+/// Calculate the word delta for streak tracking.
+/// Only positive changes count (deletions don't subtract).
+/// - Parameters:
+///   - oldCount: Previous word count
+///   - newCount: Current word count
+/// - Returns: Words added (0 if text was shortened)
+public func wordDelta(oldCount: Int, newCount: Int) -> Int {
+    max(0, newCount - oldCount)
+}
+
 /// Compute the user's "today" based on their day start hour.
 /// If current hour < dayStartHour, it's still "yesterday".
 /// - Parameters:
